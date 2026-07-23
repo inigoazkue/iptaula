@@ -1,5 +1,1 @@
-.env
-
-# datos reales extraidos (hostnames/IPs internas) - no publicar en el remoto
-scripts/migrate/data/
 __pycache__/
