@@ -42,7 +42,7 @@
       --btn-blue: #2c4562; --btn-blue-hover: #395a80; --btn-blue-ink: #cfe2fa;
       --btn-green: #23402c; --btn-green-hover: #2d5238; --btn-green-ink: #c8ecd3;
       --btn-pink: #4a2830; --btn-pink-hover: #5e323c; --btn-pink-ink: #f8ccd2;
-      --btn-neutral: #2b2940; --btn-neutral-hover: #38355210; --btn-neutral-ink: #eceafc;
+      --btn-neutral: #2b2940; --btn-neutral-hover: #383552; --btn-neutral-ink: #eceafc;
       --row-free: #1d3320; --row-used: #3a2c18; --search-match: #4a4420;
     }
   }
@@ -95,6 +95,25 @@
 
   #dark-toggle-btn { display: flex; align-items: center; justify-content: center; padding: 6px 9px; }
   #dark-toggle-btn svg { width: 16px; height: 16px; display: block; }
+
+  #settings-btn {
+    position: fixed; bottom: 22px; right: 22px; width: 46px; height: 46px;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 14px rgba(38,36,58,0.22); z-index: 50;
+  }
+  #settings-btn svg { width: 22px; height: 22px; display: block; }
+  #settings-menu {
+    position: fixed; bottom: 78px; right: 22px; z-index: 51;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.2); padding: 6px; min-width: 190px;
+    display: none; flex-direction: column; gap: 2px;
+  }
+  #settings-menu.open { display: flex; }
+  #settings-menu button {
+    background: none; color: var(--text-primary); text-align: left; font-weight: 500;
+    padding: 8px 10px; border-radius: 6px; width: 100%;
+  }
+  #settings-menu button:hover { background: var(--btn-neutral-hover); transform: none; box-shadow: none; }
 
   .search-row { margin-bottom: 14px; }
   #search-box {
@@ -215,8 +234,6 @@
   </div>
   <div class="topbar-right">
     <button class="btn-neutral" id="dark-toggle-btn" title="Modua aldatu"></button>
-    <button class="btn-neutral" id="manage-matrix-btn" style="display:none;">Matrizea kudeatu</button>
-    <button class="btn-neutral" id="manage-columns-btn" style="display:none;">Zutabeak kudeatu</button>
     <div id="auth-area"></div>
   </div>
 </div>
@@ -228,9 +245,15 @@
 <div id="status">Kargatzen...</div>
 <table id="grid" style="display:none;"></table>
 
+<button id="settings-btn" class="btn-neutral" style="display:none;" title="Ezarpenak">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+</button>
+<div id="settings-menu"></div>
+
 <dialog id="range-modal"><div class="modal-inner" id="range-modal-body"></div></dialog>
 <dialog id="columns-modal"><div class="modal-inner" id="columns-modal-body"></div></dialog>
 <dialog id="matrix-modal"><div class="modal-inner" id="matrix-modal-body"></div></dialog>
+<dialog id="users-modal"><div class="modal-inner" id="users-modal-body"></div></dialog>
 <dialog id="login-modal"><div class="modal-inner" id="login-modal-body"></div></dialog>
 <dialog id="password-modal"><div class="modal-inner" id="password-modal-body"></div></dialog>
 
@@ -241,11 +264,13 @@ let TREE = null;
 let COLUMNS = [];
 let isAuthenticated = false;
 let currentUsername = null;
+let currentRole = null;
+function isAdmin() { return isAuthenticated && currentRole === 'admin'; }
 const expandedGroups = new Set(); // agrupazio zabalduen idak, errenderizazioen artean irauten du
 let currentSearch = {matchedNodeIds: new Set(), expandIds: new Set(), ipMatches: new Map()};
 
 const SUN_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>`;
-const MOON_ICON = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.354 15.354A9 9 0 118.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>`;
+const MOON_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>`;
 
 async function api(path, opts) {
   const resp = await fetch(`/api${path}`, {headers: {'Content-Type': 'application/json'}, ...opts});
@@ -264,12 +289,14 @@ async function loadAll() {
   COLUMNS = cols;
   isAuthenticated = sess.authenticated;
   currentUsername = sess.username || null;
+  currentRole = sess.role || null;
 }
 
 async function refresh() {
   await loadAll();
   renderGrid();
   renderAuthUI();
+  renderSettingsButton();
 }
 
 function escapeAttr(s) {
@@ -308,25 +335,63 @@ initTheme();
 /* ---------- autentifikazioa (saioa hasi/itxi, pasahitza aldatu) ---------- */
 
 function renderAuthUI() {
-  document.getElementById('manage-matrix-btn').style.display = isAuthenticated ? '' : 'none';
-  document.getElementById('manage-columns-btn').style.display = isAuthenticated ? '' : 'none';
   const authArea = document.getElementById('auth-area');
   if (isAuthenticated) {
     authArea.innerHTML = `
       <span style="font-size:0.78rem; color:var(--text-secondary); margin-right:2px;">${escapeHtml(currentUsername)}</span>
-      <button class="btn-text" id="change-password-btn">pasahitza</button>
       <button class="btn-neutral" id="logout-btn">Itxi saioa</button>
     `;
     document.getElementById('logout-btn').addEventListener('click', async () => {
       await api('/logout', {method: 'POST'});
       await refresh();
     });
-    document.getElementById('change-password-btn').addEventListener('click', () => openPasswordModal());
   } else {
     authArea.innerHTML = `<button class="btn-blue" id="login-btn">Hasi saioa</button>`;
     document.getElementById('login-btn').addEventListener('click', () => openLoginModal());
   }
 }
+
+/* ---------- ezarpen-botoia (engranajea) eta bere menua ---------- */
+
+function renderSettingsButton() {
+  const btn = document.getElementById('settings-btn');
+  btn.style.display = isAuthenticated ? 'flex' : 'none';
+  if (!isAuthenticated) closeSettingsMenu();
+}
+
+function closeSettingsMenu() {
+  document.getElementById('settings-menu').classList.remove('open');
+}
+
+function renderSettingsMenu() {
+  const menu = document.getElementById('settings-menu');
+  const items = [];
+  if (isAdmin()) {
+    items.push({label: 'Matrizea kudeatu', action: () => openMatrixModal()});
+    items.push({label: 'Zutabeak kudeatu', action: () => openColumnsModal()});
+    items.push({label: 'Erabiltzaileak kudeatu', action: () => openUsersModal()});
+  }
+  items.push({label: 'Pasahitza aldatu', action: () => openPasswordModal()});
+
+  menu.innerHTML = items.map((it, i) => `<button data-i="${i}">${it.label}</button>`).join('');
+  menu.querySelectorAll('button').forEach((el, i) => {
+    el.addEventListener('click', () => { closeSettingsMenu(); items[i].action(); });
+  });
+}
+
+document.getElementById('settings-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const menu = document.getElementById('settings-menu');
+  if (menu.classList.contains('open')) { closeSettingsMenu(); return; }
+  renderSettingsMenu();
+  menu.classList.add('open');
+});
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('settings-menu');
+  if (menu.classList.contains('open') && !menu.contains(e.target) && e.target.id !== 'settings-btn') {
+    closeSettingsMenu();
+  }
+});
 
 function openLoginModal() {
   const body = document.getElementById('login-modal-body');
@@ -447,7 +512,7 @@ document.getElementById('search-box').addEventListener('input', (e) => {
 function addButtons(parentId, site, role, onDone) {
   const wrap = document.createElement('div');
   wrap.className = 'cell-actions';
-  if (!isAuthenticated) return wrap;
+  if (!isAdmin()) return wrap;
   const addRango = document.createElement('button');
   addRango.className = 'btn-blue'; addRango.textContent = '+ tartea';
   const addGroup = document.createElement('button');
@@ -569,8 +634,8 @@ function renderNode(node, site, role) {
     <div class="node-head">
       <span class="node-name">${escapeHtml(node.name)}</span>
       <span class="node-ctrl">
-        ${isAuthenticated && node.node_type === 'agrupacion' ? '<button class="btn-text" data-action="edit">editatu</button>' : ''}
-        ${isAuthenticated ? '<button class="btn-text" data-action="delete">ezabatu</button>' : ''}
+        ${isAdmin() && node.node_type === 'agrupacion' ? '<button class="btn-text" data-action="edit">editatu</button>' : ''}
+        ${isAdmin() ? '<button class="btn-text" data-action="delete">ezabatu</button>' : ''}
       </span>
     </div>
     ${node.description ? `<span class="node-desc">${escapeHtml(node.description)}</span>` : ''}
@@ -592,7 +657,7 @@ function renderNode(node, site, role) {
     childrenBox.appendChild(addRow);
     el.appendChild(childrenBox);
 
-    if (isAuthenticated) {
+    if (isAdmin()) {
       body.querySelector('[data-action="edit"]').addEventListener('click', (e) => {
         e.stopPropagation();
         const form = buildEditForm(node, async (changed) => { changed ? await refresh() : form.replaceWith(body); });
@@ -601,7 +666,7 @@ function renderNode(node, site, role) {
     }
   }
 
-  if (isAuthenticated) {
+  if (isAdmin()) {
     body.querySelector('[data-action="delete"]').addEventListener('click', (e) => {
       e.stopPropagation();
       deleteNode(node);
@@ -700,7 +765,7 @@ async function renderRangeModal(nodeId) {
 
     <div class="modal-section">
       <h3>Tartearen datuak</h3>
-      ${isAuthenticated ? `
+      ${isAdmin() ? `
         <form class="inline-form" id="range-meta-form">
           <input name="name" value="${escapeAttr(node.name)}" placeholder="Izena" required>
           <input name="cidr" value="${escapeAttr(node.cidr)}" placeholder="10.1.2.0/24" required>
@@ -715,9 +780,9 @@ async function renderRangeModal(nodeId) {
     <div class="modal-section">
       <h3>Zutabe aktiboak</h3>
       <div id="active-columns">
-        ${(node.columns || []).map(c => `<span class="col-chip">${escapeHtml(c.name)} ${isAuthenticated ? `<button data-col="${c.id}" title="Zutabea kendu">×</button>` : ''}</span>`).join('') || '<span class="node-desc">Oraindik bat ere ez.</span>'}
+        ${(node.columns || []).map(c => `<span class="col-chip">${escapeHtml(c.name)} ${isAdmin() ? `<button data-col="${c.id}" title="Zutabea kendu">×</button>` : ''}</span>`).join('') || '<span class="node-desc">Oraindik bat ere ez.</span>'}
       </div>
-      ${isAuthenticated ? `
+      ${isAdmin() ? `
         <form class="inline-form" id="add-column-form">
           <select name="column_id" ${availableCols.length ? '' : 'disabled'}>
             ${availableCols.length ? availableCols.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('') : '<option>Ez dago zutabe gehiago katalogoan</option>'}
@@ -741,7 +806,7 @@ async function renderRangeModal(nodeId) {
 
   document.getElementById('close-range-modal').addEventListener('click', () => document.getElementById('range-modal').close());
 
-  if (isAuthenticated) {
+  if (isAdmin()) {
     document.getElementById('range-meta-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const f = e.target;
@@ -927,8 +992,6 @@ async function afterCatalogChange() {
   }
 }
 
-document.getElementById('manage-columns-btn').addEventListener('click', () => openColumnsModal());
-
 /* ---------- matrizearen modala (egoitzak eta sare motak) ---------- */
 
 async function openMatrixModal() {
@@ -1007,7 +1070,69 @@ async function renderMatrixModal() {
   });
 }
 
-document.getElementById('manage-matrix-btn').addEventListener('click', () => openMatrixModal());
+/* ---------- erabiltzaileen modala (admin/user rolak) ---------- */
+
+async function openUsersModal() {
+  await renderUsersModal();
+  document.getElementById('users-modal').showModal();
+}
+
+async function renderUsersModal() {
+  const body = document.getElementById('users-modal-body');
+  const users = await api('/users');
+  body.innerHTML = `
+    <div class="modal-header">
+      <h2>Erabiltzaileak kudeatu</h2>
+      <button class="btn-neutral" id="close-users-modal">Itxi</button>
+    </div>
+    <div class="modal-section">
+      <div id="user-list">
+        ${users.map(u => `
+          <div class="catalog-row">
+            <span>${escapeHtml(u.username)} <span class="node-desc" style="display:inline;">(${u.role === 'admin' ? 'administratzailea' : 'erabiltzailea'})</span></span>
+            <button class="btn-text" data-id="${u.id}">ezabatu</button>
+          </div>
+        `).join('')}
+      </div>
+      <form class="inline-form" id="new-user-form" style="margin-top:12px;">
+        <input name="username" placeholder="Erabiltzailea" required>
+        <input name="password" type="password" placeholder="Hasierako pasahitza" required>
+        <select name="role">
+          <option value="user">Erabiltzailea (erregistroak bakarrik)</option>
+          <option value="admin">Administratzailea (dena)</option>
+        </select>
+        <button type="submit" class="btn-green">+ Erabiltzailea sortu</button>
+      </form>
+      <div class="form-error" id="user-form-error"></div>
+    </div>
+  `;
+  document.getElementById('close-users-modal').addEventListener('click', () => document.getElementById('users-modal').close());
+
+  body.querySelectorAll('#user-list button[data-id]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Erabiltzaile hau ezabatu?')) return;
+      try {
+        await api(`/users/${btn.dataset.id}`, {method: 'DELETE'});
+        await renderUsersModal();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  });
+
+  document.getElementById('new-user-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    document.getElementById('user-form-error').textContent = '';
+    try {
+      await api('/users', {method: 'POST', body: JSON.stringify({
+        username: e.target.username.value, password: e.target.password.value, role: e.target.role.value,
+      })});
+      await renderUsersModal();
+    } catch (err) {
+      document.getElementById('user-form-error').textContent = err.message;
+    }
+  });
+}
 
 refresh().catch(err => {
   document.getElementById('status').textContent = `Errorea: ${err.message}`;

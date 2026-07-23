@@ -100,6 +100,8 @@ CREATE TABLE IF NOT EXISTS ip_values (
     PRIMARY KEY (ip_entry_id, column_id)
 );
 
+-- se mantiene solo para poder migrar instalaciones previas (un único admin)
+-- a la tabla `users`; no se usa para nada más.
 CREATE TABLE IF NOT EXISTS auth_config (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     username TEXT NOT NULL,
@@ -107,8 +109,18 @@ CREATE TABLE IF NOT EXISTS auth_config (
     password_hash TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    salt TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('admin', 'user')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
     token TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 """
@@ -150,12 +162,22 @@ def seed_defaults(conn):
         conn.executemany("INSERT INTO sites (slug, name) VALUES (?, ?)", DEFAULT_SITES)
     if not conn.execute("SELECT 1 FROM roles LIMIT 1").fetchone():
         conn.executemany("INSERT INTO roles (slug, name) VALUES (?, ?)", DEFAULT_ROLES)
-    if not conn.execute("SELECT 1 FROM auth_config WHERE id=1").fetchone():
-        salt, digest = hash_password(DEFAULT_ADMIN_PASSWORD)
-        conn.execute(
-            "INSERT INTO auth_config (id, username, salt, password_hash) VALUES (1, ?, ?, ?)",
-            (DEFAULT_ADMIN_USER, salt, digest),
-        )
+    if not conn.execute("SELECT 1 FROM users LIMIT 1").fetchone():
+        # Migra el admin único de instalaciones previas si existe (conserva
+        # la contraseña si ya la habían cambiado); si no, siembra el admin
+        # por defecto.
+        legacy = conn.execute("SELECT * FROM auth_config WHERE id=1").fetchone()
+        if legacy:
+            conn.execute(
+                "INSERT INTO users (username, salt, password_hash, role) VALUES (?, ?, ?, 'admin')",
+                (legacy["username"], legacy["salt"], legacy["password_hash"]),
+            )
+        else:
+            salt, digest = hash_password(DEFAULT_ADMIN_PASSWORD)
+            conn.execute(
+                "INSERT INTO users (username, salt, password_hash, role) VALUES (?, ?, ?, 'admin')",
+                (DEFAULT_ADMIN_USER, salt, digest),
+            )
 
 
 def init_db():
@@ -174,16 +196,35 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="IP Taula", lifespan=lifespan)
 
 
-def require_auth(session: Optional[str] = Cookie(None)):
+def get_current_user(session: Optional[str] = Cookie(None)):
     if not session:
         raise HTTPException(401, "Ez dago saiorik hasita")
     with get_db() as conn:
-        row = conn.execute("SELECT * FROM sessions WHERE token=?", (session,)).fetchone()
+        row = conn.execute(
+            "SELECT s.created_at AS session_created_at, u.id, u.username, u.role "
+            "FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token=?",
+            (session,),
+        ).fetchone()
     if not row:
         raise HTTPException(401, "Saioa ez da baliozkoa")
-    created = datetime.strptime(row["created_at"], "%Y-%m-%d %H:%M:%S")
+    created = datetime.strptime(row["session_created_at"], "%Y-%m-%d %H:%M:%S")
     if datetime.utcnow() - created > timedelta(days=SESSION_MAX_AGE_DAYS):
         raise HTTPException(401, "Saioa iraungita dago")
+    return row
+
+
+def require_auth(user=Depends(get_current_user)):
+    """Edozein saio hasitako erabiltzailek egin dezakeen ekintzetarako (IP
+    erregistroak gehitu/editatu barne)."""
+    return user
+
+
+def require_admin(user=Depends(get_current_user)):
+    """Egitura aldatzen duten ekintzetarako bakarrik (tarte/talde/zutabe/
+    egoitza/sare mota/erabiltzaile berriak sortu, izena aldatu, ezabatu...)."""
+    if user["role"] != "admin":
+        raise HTTPException(403, "Ekintza hau administratzaileek bakarrik egin dezakete")
+    return user
 
 
 class NodeIn(BaseModel):
@@ -314,7 +355,7 @@ def get_tree():
 
 
 @app.post("/api/nodes")
-def create_node(node: NodeIn, _auth=Depends(require_auth)):
+def create_node(node: NodeIn, _auth=Depends(require_admin)):
     if node.node_type not in ("rango", "agrupacion"):
         raise HTTPException(400, "node_type balioak 'rango' edo 'agrupacion' izan behar du")
     if not node.name.strip():
@@ -349,7 +390,7 @@ def create_node(node: NodeIn, _auth=Depends(require_auth)):
 
 
 @app.patch("/api/nodes/{node_id}")
-def update_node(node_id: int, patch: NodeUpdate, _auth=Depends(require_auth)):
+def update_node(node_id: int, patch: NodeUpdate, _auth=Depends(require_admin)):
     with get_db() as conn:
         row = conn.execute("SELECT * FROM nodes WHERE id=?", (node_id,)).fetchone()
         if not row:
@@ -372,7 +413,7 @@ def update_node(node_id: int, patch: NodeUpdate, _auth=Depends(require_auth)):
 
 
 @app.delete("/api/nodes/{node_id}")
-def delete_node(node_id: int, _auth=Depends(require_auth)):
+def delete_node(node_id: int, _auth=Depends(require_admin)):
     with get_db() as conn:
         row = conn.execute("SELECT id FROM nodes WHERE id=?", (node_id,)).fetchone()
         if not row:
@@ -420,12 +461,12 @@ def list_sites():
 
 
 @app.post("/api/sites")
-def create_site(body: NamedIn, _auth=Depends(require_auth)):
+def create_site(body: NamedIn, _auth=Depends(require_admin)):
     return _create_named("sites", body.name, _auth)
 
 
 @app.delete("/api/sites/{site_id}")
-def delete_site(site_id: int, _auth=Depends(require_auth)):
+def delete_site(site_id: int, _auth=Depends(require_admin)):
     return _delete_named("sites", "site", site_id)
 
 
@@ -435,12 +476,12 @@ def list_roles():
 
 
 @app.post("/api/roles")
-def create_role(body: NamedIn, _auth=Depends(require_auth)):
+def create_role(body: NamedIn, _auth=Depends(require_admin)):
     return _create_named("roles", body.name, _auth)
 
 
 @app.delete("/api/roles/{role_id}")
-def delete_role(role_id: int, _auth=Depends(require_auth)):
+def delete_role(role_id: int, _auth=Depends(require_admin)):
     return _delete_named("roles", "role", role_id)
 
 
@@ -454,7 +495,7 @@ def list_columns():
 
 
 @app.post("/api/columns")
-def create_column(col: ColumnIn, _auth=Depends(require_auth)):
+def create_column(col: ColumnIn, _auth=Depends(require_admin)):
     name = col.name.strip()
     if not name:
         raise HTTPException(400, "Zutabearen izena beharrezkoa da")
@@ -466,7 +507,7 @@ def create_column(col: ColumnIn, _auth=Depends(require_auth)):
 
 
 @app.delete("/api/columns/{column_id}")
-def delete_column(column_id: int, _auth=Depends(require_auth)):
+def delete_column(column_id: int, _auth=Depends(require_admin)):
     with get_db() as conn:
         if not conn.execute("SELECT id FROM columns_catalog WHERE id=?", (column_id,)).fetchone():
             raise HTTPException(404, "Ez da aurkitu")
@@ -477,7 +518,7 @@ def delete_column(column_id: int, _auth=Depends(require_auth)):
 # --- columnas activas de un rango concreto ---
 
 @app.post("/api/nodes/{node_id}/columns")
-def add_range_column(node_id: int, body: RangeColumnIn, _auth=Depends(require_auth)):
+def add_range_column(node_id: int, body: RangeColumnIn, _auth=Depends(require_admin)):
     with get_db() as conn:
         get_range_node(conn, node_id)
         if not conn.execute("SELECT id FROM columns_catalog WHERE id=?", (body.column_id,)).fetchone():
@@ -490,7 +531,7 @@ def add_range_column(node_id: int, body: RangeColumnIn, _auth=Depends(require_au
 
 
 @app.delete("/api/nodes/{node_id}/columns/{column_id}")
-def remove_range_column(node_id: int, column_id: int, _auth=Depends(require_auth)):
+def remove_range_column(node_id: int, column_id: int, _auth=Depends(require_admin)):
     with get_db() as conn:
         get_range_node(conn, node_id)
         conn.execute(
@@ -557,25 +598,28 @@ def get_session(session: Optional[str] = Cookie(None)):
     if not session:
         return {"authenticated": False}
     with get_db() as conn:
-        row = conn.execute("SELECT * FROM sessions WHERE token=?", (session,)).fetchone()
-        user = conn.execute("SELECT username FROM auth_config WHERE id=1").fetchone()
+        row = conn.execute(
+            "SELECT s.created_at AS session_created_at, u.username, u.role "
+            "FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token=?",
+            (session,),
+        ).fetchone()
     if not row:
         return {"authenticated": False}
-    created = datetime.strptime(row["created_at"], "%Y-%m-%d %H:%M:%S")
+    created = datetime.strptime(row["session_created_at"], "%Y-%m-%d %H:%M:%S")
     if datetime.utcnow() - created > timedelta(days=SESSION_MAX_AGE_DAYS):
         return {"authenticated": False}
-    return {"authenticated": True, "username": user["username"] if user else None}
+    return {"authenticated": True, "username": row["username"], "role": row["role"]}
 
 
 @app.post("/api/login")
 def login(body: LoginIn, response: Response):
     with get_db() as conn:
-        row = conn.execute("SELECT * FROM auth_config WHERE id=1").fetchone()
-    if not row or row["username"] != body.username or not verify_password(body.password, row["salt"], row["password_hash"]):
+        user = conn.execute("SELECT * FROM users WHERE username=?", (body.username,)).fetchone()
+    if not user or not verify_password(body.password, user["salt"], user["password_hash"]):
         raise HTTPException(401, "Erabiltzailea edo pasahitza okerra")
     token = secrets.token_hex(32)
     with get_db() as conn:
-        conn.execute("INSERT INTO sessions (token) VALUES (?)", (token,))
+        conn.execute("INSERT INTO sessions (token, user_id) VALUES (?, ?)", (token, user["id"]))
     response.set_cookie(
         SESSION_COOKIE, token, httponly=True, samesite="lax",
         max_age=60 * 60 * 24 * SESSION_MAX_AGE_DAYS, path="/",
@@ -593,15 +637,68 @@ def logout(response: Response, session: Optional[str] = Cookie(None)):
 
 
 @app.post("/api/change-password")
-def change_password(body: ChangePasswordIn, _auth=Depends(require_auth)):
+def change_password(body: ChangePasswordIn, user=Depends(require_auth)):
     with get_db() as conn:
-        row = conn.execute("SELECT * FROM auth_config WHERE id=1").fetchone()
+        row = conn.execute("SELECT * FROM users WHERE id=?", (user["id"],)).fetchone()
         if not verify_password(body.current_password, row["salt"], row["password_hash"]):
             raise HTTPException(400, "Uneko pasahitza ez da zuzena")
         if len(body.new_password) < 4:
             raise HTTPException(400, "Pasahitza berria laburregia da")
         salt, digest = hash_password(body.new_password)
-        conn.execute("UPDATE auth_config SET password_hash=?, salt=? WHERE id=1", (digest, salt))
+        conn.execute("UPDATE users SET password_hash=?, salt=? WHERE id=?", (digest, salt, user["id"]))
+    return {"ok": True}
+
+
+# --- gestión de usuarios (solo admin) ---
+
+class UserIn(BaseModel):
+    username: str
+    password: str
+    role: str
+
+
+@app.get("/api/users")
+def list_users(_auth=Depends(require_admin)):
+    with get_db() as conn:
+        rows = conn.execute("SELECT id, username, role FROM users ORDER BY id").fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.post("/api/users")
+def create_user(body: UserIn, _auth=Depends(require_admin)):
+    username = body.username.strip()
+    if not username:
+        raise HTTPException(400, "Erabiltzaile izena beharrezkoa da")
+    if body.role not in ("admin", "user"):
+        raise HTTPException(400, "Rol baliogabea")
+    if len(body.password) < 4:
+        raise HTTPException(400, "Pasahitza laburregia da")
+    salt, digest = hash_password(body.password)
+    with get_db() as conn:
+        if conn.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
+            raise HTTPException(409, "Badago erabiltzaile izen hori jada")
+        cur = conn.execute(
+            "INSERT INTO users (username, salt, password_hash, role) VALUES (?, ?, ?, ?)",
+            (username, salt, digest, body.role),
+        )
+        return {"id": cur.lastrowid}
+
+
+@app.delete("/api/users/{user_id}")
+def delete_user(user_id: int, user=Depends(require_admin)):
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Ez da aurkitu")
+        if row["id"] == user["id"]:
+            raise HTTPException(400, "Ezin duzu zeure burua ezabatu")
+        if row["role"] == "admin":
+            remaining_admins = conn.execute(
+                "SELECT COUNT(*) AS n FROM users WHERE role='admin'"
+            ).fetchone()["n"]
+            if remaining_admins <= 1:
+                raise HTTPException(400, "Ezin da azken administratzailea ezabatu")
+        conn.execute("DELETE FROM users WHERE id=?", (user_id,))
     return {"ok": True}
 
 
