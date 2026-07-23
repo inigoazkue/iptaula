@@ -43,6 +43,13 @@ Un `rango` no tiene campos fijos tipo "hostname" o "MAC". En su lugar:
 
 No existe un paso de "añadir IP". El frontend enumera en el cliente todas las direcciones de host del CIDR del rango (`hostsOf()` en `index.html`) y pinta una fila por dirección, tenga o no datos todavía. Editar una celda llama a `PUT /api/nodes/{id}/ip-values`, un único endpoint idempotente que crea la fila de `ip_entries` en la primera escritura y **la borra de nuevo si se queda sin ningún valor no vacío** — una IP sin nada registrado es indistinguible de una libre, así que no se persiste nada para ella. Si tocas ese endpoint, conserva este invariante: no reintroduzcas un flujo separado de crear/borrar IP.
 
+### Orden de los nodos y cómo se mueven
+
+Cada nodo tiene una `position` (entero) que ordena a sus hermanos (mismos `parent_id`/`site`/`role`); `get_tree()` ordena por `position, id`. `POST /api/nodes/{id}/move` es el único endpoint para reordenar y para reparentar/cambiar de sede-rol a la vez:
+- con `before_id`: inserta el nodo justo delante de ese hermano en el destino (reordenar sin cambiar de sitio, o cambiar de sitio insertándolo en un punto concreto);
+- sin `before_id`: lo añade al final del destino (soltar en hueco vacío).
+- Si el nodo movido es una `agrupacion`, su `site`/`role` — y los de **todos sus descendientes** — se actualizan para que coincidan con el nuevo destino (`get_descendant_ids()` + `UPDATE ... WHERE id IN (...)`). Se rechaza mover un nodo dentro de sí mismo o de uno de sus propios descendientes (comprobado con la misma función).
+
 ### Autenticación: dos roles, sesión por cookie, sin dependencias externas
 
 - Las contraseñas se hashean con `hashlib.pbkdf2_hmac` de la librería estándar (sin bcrypt/passlib, a propósito, para no añadir instalaciones de pip detrás del proxy corporativo — ver más abajo).
@@ -62,7 +69,12 @@ No hay framework de migraciones — `SCHEMA` en `app/main.py` se aplica con `exe
 - Varios `<dialog>` (modales nativos de HTML) hacen de ventana modal: detalle/edición de rango, catálogo de columnas, gestión de matriz (sedes/roles), gestión de usuarios, login, cambio de contraseña.
 - El texto de la interfaz está íntegramente en euskera, incluidos los mensajes de error que genera el backend (`HTTPException`). Mantén en euskera cualquier texto nuevo de cara al usuario, por coherencia.
 - Los controles de edición se muestran u ocultan según `isAuthenticated`/`isAdmin()` calculado en el cliente a partir de `/api/session` — pero la autoridad real es el backend (cada endpoint de escritura vuelve a comprobar con `require_auth`/`require_admin`), así que el filtrado del frontend es solo para no mostrar controles que el usuario no podría usar, no una barrera de seguridad.
+- Mover nodos es arrastrar y soltar (solo admin, `draggable=true` en cada tarjeta `.node`; el estado del arrastre en curso es la variable global `draggingNode`, no `dataTransfer.getData()`, para no depender de su soporte irregular durante `dragover`). Hay tres tipos de zona de soltado, cada uno con su propio `dragover`/`drop` con `stopPropagation()` para que no se disparen varios a la vez al estar anidados en el DOM: soltar sobre otra tarjeta (`move` con `before_id`), soltar en el hueco vacío de una celda `<td>` (`move` con `site`/`role`, a primer nivel) y soltar en el hueco vacío del área desplegada de una agrupación (`move` con `parent_id`, al final). `collectDescendantIds()` bloquea en el cliente soltar un grupo sobre uno de sus propios descendientes antes de llamar a la API (que también lo rechazaría, pero así se evita el viaje de ida y vuelta).
 
 ### Detalles del despliegue
 
 La red corporativa exige pasar por un proxy con inspección (Zscaler) para cualquier salida HTTPS, incluido el `pip install` durante el build de Docker — el `Dockerfile` recibe `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` como build args (con valor por defecto en `docker-compose.yml` apuntando al proxy corporativo conocido, ya que `sudo` en el host de despliegue no propaga las variables de entorno del usuario) e instala el certificado raíz de Zscaler (`certs/ZscalerRootCertificate-2048-SHA256.crt`) en el almacén de confianza de la imagen de build para que `pip` pueda verificar el TLS a través del proxy que inspecciona el tráfico.
+
+El servidor de producción (`ingprod@10.3.159.73` / `MIR-IPTAULA`) no tiene GitHub Actions ni ningún CI: desplegar es `git pull && sudo docker compose up -d --build` a mano (o por SSH). Dos detalles si se automatiza esto:
+- `sudo` ahí necesita `-S` con la contraseña por stdin cuando se ejecuta sin pty (p.ej. `echo '<pass>' | sudo -S docker compose ...`), porque no propaga terminal interactiva por SSH en modo batch.
+- El repo tiene dos remotos: `origin` (`http://gitlab149.bio.etb/ip_taula/ip_taula.git`, el interno de EITB, el que hay que mantener al día) y `github` (espejo público en `github.com/inigoazkue/iptaula`, secundario). Un `git push` a secas ya va a `origin`.
