@@ -41,3 +41,15 @@ Página muy grande (685 filas, ~19 subredes distintas dentro de un único docume
 Página sencilla, una sola subred (10.114.11.0/24, 113 entradas cargadas). A petición del usuario, la columna "Ping" del documento original no se cargó (no se sabía qué representaba).
 
 1. **IP duplicada `10.114.11.118`**: dos nombres distintos, `HOUSE MONITORING` (con nota "FLOW 3") y `MAM`. Se cargó `HOUSE MONITORING` como nombre principal y se anotó en Oharrak que `MAM` comparte la misma IP. **Pendiente de confirmar cuál de los dos sigue en uso.**
+
+## bilbao_10_114_12.htm → rango independiente "10.114.12.x" (Bilbo/Gestioa, fuera de cualquier agrupación)
+
+Página con varios equipos que en el documento original no tenían una IP explícita asignada (solo el nombre, en filas sueltas después de un equipo con IP conocida). Instrucción del usuario: reconstruir la IP por la secuencia, y en esas filas concretas dejar el campo Hostname vacío y poner el nombre original en Oharrak (para poder distinguir a simple vista qué entradas tienen IP confirmada en el documento y cuáles se han deducido).
+
+1. **`EDKMIRLF2.1`, `EDKMIRLF3.1`, `EDKMIRLF4.1`**: sin IP en el original, justo después de `10.114.12.52` (`EDKMIRLF1.1`). Se les asignaron `.53`, `.54` y `.55` por ser las siguientes tres libres de la secuencia.
+
+2. **`EDKMIRLF1.2`, `EDKMIRLF2.2`, `EDKMIRLF3.2`, `EDKMIRLF4.2`**: sin IP en el original, después de `10.114.12.61` (`EDKMIRSP2`). Aquí había **4** filas sin IP, no 3 como en el bloque anterior — se lo comenté al usuario (por simetría con el bloque `.51`/`.52`, donde `LF1.1` se quedaba con su propia IP inmediatamente después de la del switch principal) y confirmó asignar las 4 seguidas: `.62`, `.63`, `.64` y `.65`.
+
+3. **`PRUEBAS ONLINE`**: la última fila del documento original decía literalmente "10.114.12.100-120" (un rango, no una IP única). Se cargó en cada una de las 21 IPs de `.100` a `.120`, con Oharrak="PRUEBAS ONLINE" y Hostname vacío.
+
+4. **`HUALogs DC_MIR_Insight` — sin cargar, IP desconocida**: aparece en el documento original justo después de `10.114.12.70` (`iMaster3/3 DC_MIR`), sin ninguna IP propia ni forma clara de deducirla por secuencia (el hueco entre `.70` y el rango final `.100-120` es demasiado amplio para asumir nada). **Viene de la tabla de `bilbao_10_114_12.htm`, fila siguiente a `10.114.12.70`. Pendiente de averiguar su IP real.**
