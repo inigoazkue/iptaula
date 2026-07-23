@@ -14,7 +14,7 @@ cada rango elige cuáles de ellas usar.
 from contextlib import asynccontextmanager, contextmanager
 from ipaddress import ip_address, ip_network
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 import os
 import sqlite3
 
@@ -121,14 +121,10 @@ class RangeColumnIn(BaseModel):
     column_id: int
 
 
-class IpEntryIn(BaseModel):
+class IpValueSet(BaseModel):
     ip: str
-    values: Dict[str, Optional[str]] = {}
-
-
-class IpEntryUpdate(BaseModel):
-    ip: Optional[str] = None
-    values: Optional[Dict[str, Optional[str]]] = None
+    column_id: int
+    value: Optional[str] = None
 
 
 def validate_cidr(cidr):
@@ -329,58 +325,48 @@ def remove_range_column(node_id: int, column_id: int):
 
 
 # --- IPs dentro de un rango ---
+# No hay "alta manual de IP": el frontend enumera todas las direcciones del
+# CIDR y este único endpoint fija el valor de una columna para una de ellas,
+# creando la fila si hacía falta y borrándola si se queda sin ningún valor
+# (una IP sin datos no es distinta de una libre, no tiene sentido guardarla).
 
-@app.post("/api/nodes/{node_id}/ips")
-def create_ip_entry(node_id: int, entry: IpEntryIn):
+@app.put("/api/nodes/{node_id}/ip-values")
+def set_ip_value(node_id: int, body: IpValueSet):
     with get_db() as conn:
         node = get_range_node(conn, node_id)
-        validate_ip_in_cidr(entry.ip, node["cidr"])
-        try:
-            cur = conn.execute(
-                "INSERT INTO ip_entries (node_id, ip) VALUES (?, ?)", (node_id, entry.ip)
-            )
-        except sqlite3.IntegrityError:
-            raise HTTPException(409, "Esa IP ya está registrada en este rango")
-        entry_id = cur.lastrowid
-        for col_id, value in entry.values.items():
-            conn.execute(
-                "INSERT INTO ip_values (ip_entry_id, column_id, value) VALUES (?, ?, ?)",
-                (entry_id, int(col_id), value),
-            )
-        return {"id": entry_id}
+        validate_ip_in_cidr(body.ip, node["cidr"])
+        if not conn.execute(
+            "SELECT 1 FROM range_columns WHERE node_id=? AND column_id=?", (node_id, body.column_id)
+        ).fetchone():
+            raise HTTPException(400, "Esa columna no está activa en este rango")
 
+        entry = conn.execute(
+            "SELECT id FROM ip_entries WHERE node_id=? AND ip=?", (node_id, body.ip)
+        ).fetchone()
+        value = body.value or None
 
-@app.patch("/api/ips/{entry_id}")
-def update_ip_entry(entry_id: int, patch: IpEntryUpdate):
-    with get_db() as conn:
-        row = conn.execute("SELECT * FROM ip_entries WHERE id=?", (entry_id,)).fetchone()
-        if not row:
-            raise HTTPException(404, "No encontrada")
+        if not entry:
+            if value is None:
+                return {"ok": True}
+            entry_id = conn.execute(
+                "INSERT INTO ip_entries (node_id, ip) VALUES (?, ?)", (node_id, body.ip)
+            ).lastrowid
+        else:
+            entry_id = entry["id"]
 
-        if patch.ip is not None and patch.ip != row["ip"]:
-            node = conn.execute("SELECT * FROM nodes WHERE id=?", (row["node_id"],)).fetchone()
-            validate_ip_in_cidr(patch.ip, node["cidr"])
-            try:
-                conn.execute("UPDATE ip_entries SET ip=? WHERE id=?", (patch.ip, entry_id))
-            except sqlite3.IntegrityError:
-                raise HTTPException(409, "Esa IP ya está registrada en este rango")
+        conn.execute(
+            "INSERT INTO ip_values (ip_entry_id, column_id, value) VALUES (?, ?, ?) "
+            "ON CONFLICT(ip_entry_id, column_id) DO UPDATE SET value=excluded.value",
+            (entry_id, body.column_id, value),
+        )
 
-        if patch.values:
-            for col_id, value in patch.values.items():
-                conn.execute(
-                    "INSERT INTO ip_values (ip_entry_id, column_id, value) VALUES (?, ?, ?) "
-                    "ON CONFLICT(ip_entry_id, column_id) DO UPDATE SET value=excluded.value",
-                    (entry_id, int(col_id), value),
-                )
-    return {"ok": True}
+        remaining = conn.execute(
+            "SELECT COUNT(*) AS n FROM ip_values WHERE ip_entry_id=? AND value IS NOT NULL AND value != ''",
+            (entry_id,),
+        ).fetchone()["n"]
+        if remaining == 0:
+            conn.execute("DELETE FROM ip_entries WHERE id=?", (entry_id,))
 
-
-@app.delete("/api/ips/{entry_id}")
-def delete_ip_entry(entry_id: int):
-    with get_db() as conn:
-        if not conn.execute("SELECT id FROM ip_entries WHERE id=?", (entry_id,)).fetchone():
-            raise HTTPException(404, "No encontrada")
-        conn.execute("DELETE FROM ip_entries WHERE id=?", (entry_id,))
     return {"ok": True}
 
 

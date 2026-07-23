@@ -97,20 +97,24 @@
   }
   th:first-child { width: 130px; }
 
-  .cell-actions { display: flex; gap: 8px; margin-bottom: 8px; }
+  .cell-actions {
+    display: flex; gap: 8px; margin-bottom: 8px;
+    opacity: 0; pointer-events: none; transition: opacity 150ms ease;
+  }
+  td:hover > .cell-actions, td:hover .cell-actions { opacity: 1; pointer-events: auto; }
 
   .node {
     border: 1px solid var(--border); border-radius: 10px;
     padding: 8px 10px; margin-bottom: 8px; background: var(--surface-1);
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow); cursor: pointer;
   }
   .node.rango { background: var(--rango-bg); border-color: var(--rango-border); }
   .node.agrupacion { background: var(--group-bg); border-color: var(--group-border); border-style: dashed; }
   .node-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
   .node-name { font-weight: 700; font-size: 0.88rem; }
-  .node.agrupacion > .node-head .node-name { cursor: pointer; }
   .node-desc { color: var(--text-secondary); font-size: 0.76rem; display: block; margin-top: 2px; }
   .node-cidr { color: var(--text-secondary); font-size: 0.78rem; font-family: ui-monospace, monospace; margin-top: 3px; }
+  .node-cols { color: var(--text-muted); font-size: 0.74rem; display: block; margin-top: 2px; }
   .node-ctrl { display: flex; gap: 8px; white-space: nowrap; }
 
   .ip-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
@@ -120,8 +124,12 @@
     font-family: ui-monospace, monospace;
   }
 
-  .node-children { margin: 8px 0 2px 14px; padding-left: 10px; border-left: 2px solid var(--gridline); }
-  .node-add-row { display: flex; gap: 8px; margin-top: 6px; }
+  .node-children { margin: 8px 0 2px 14px; padding-left: 10px; border-left: 2px solid var(--gridline); cursor: default; }
+  .node-add-row {
+    display: flex; gap: 8px; margin-top: 6px; padding: 4px;
+    opacity: 0; pointer-events: none; transition: opacity 150ms ease;
+  }
+  .node-children:hover .node-add-row { opacity: 1; pointer-events: auto; }
 
   form.inline-form {
     display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0;
@@ -325,25 +333,22 @@ function renderNode(node, site, role) {
     const firstVal = node.columns && node.columns[0] ? e.values[String(node.columns[0].id)] : null;
     return `<span class="ip-pill">${e.ip}${firstVal ? ' · ' + escapeHtml(firstVal) : ''}</span>`;
   }).join('');
+  const colNames = (node.columns || []).map(c => escapeHtml(c.name)).join(', ');
 
   body.innerHTML = `
     <div class="node-head">
       <span class="node-name">${escapeHtml(node.name)}</span>
       <span class="node-ctrl">
-        ${node.node_type === 'rango' ? '<button class="btn-text" data-action="open">ver / editar</button>' : ''}
         ${node.node_type === 'agrupacion' ? '<button class="btn-text" data-action="edit">editar</button>' : ''}
         <button class="btn-text" data-action="delete">borrar</button>
       </span>
     </div>
     ${node.description ? `<span class="node-desc">${escapeHtml(node.description)}</span>` : ''}
     ${node.node_type === 'rango' ? `<span class="node-cidr">${node.cidr}</span>` : ''}
+    ${node.node_type === 'rango' && colNames ? `<span class="node-cols">Zutabeak: ${colNames}</span>` : ''}
     ${node.node_type === 'rango' && pills ? `<div class="ip-pills">${pills}</div>` : ''}
   `;
   el.appendChild(body);
-
-  if (node.node_type === 'rango') {
-    body.querySelector('[data-action="open"]').addEventListener('click', () => openRangeModal(node.id));
-  }
 
   let childrenBox = null;
   if (node.node_type === 'agrupacion') {
@@ -357,9 +362,6 @@ function renderNode(node, site, role) {
     childrenBox.appendChild(addRow);
     el.appendChild(childrenBox);
 
-    body.querySelector('.node-name').addEventListener('click', () => {
-      childrenBox.style.display = childrenBox.style.display === 'none' ? 'block' : 'none';
-    });
     body.querySelector('[data-action="edit"]').addEventListener('click', (e) => {
       e.stopPropagation();
       const form = buildEditForm(node, async (changed) => { changed ? await refresh() : form.replaceWith(body); });
@@ -370,6 +372,17 @@ function renderNode(node, site, role) {
   body.querySelector('[data-action="delete"]').addEventListener('click', (e) => {
     e.stopPropagation();
     deleteNode(node);
+  });
+
+  // clic en toda la tarjeta; se para la propagación para que una tarjeta
+  // hija no dispare también el toggle de la agrupación que la contiene
+  el.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (node.node_type === 'rango') {
+      openRangeModal(node.id);
+    } else if (childrenBox) {
+      childrenBox.style.display = childrenBox.style.display === 'none' ? 'block' : 'none';
+    }
   });
 
   return el;
@@ -419,11 +432,19 @@ function allTopNodes() {
   return acc;
 }
 
+let currentRangeModalNodeId = null;
+
 async function openRangeModal(nodeId) {
   const modal = document.getElementById('range-modal');
+  currentRangeModalNodeId = nodeId;
   await renderRangeModal(nodeId);
   modal.showModal();
 }
+
+document.getElementById('range-modal').addEventListener('close', () => {
+  currentRangeModalNodeId = null;
+  refresh();
+});
 
 async function renderRangeModal(nodeId) {
   const node = findNodeById(nodeId, allTopNodes());
@@ -462,14 +483,9 @@ async function renderRangeModal(nodeId) {
     </div>
 
     <div class="modal-section">
-      <h3>IPs en uso</h3>
+      <h3>Direcciones IP</h3>
+      <p class="node-desc" style="margin-bottom:8px;">Se listan todas las IPs del rango. Escribe directamente en una celda para guardarla (se guarda sola al salir del campo); una fila sin ningún dato se considera libre.</p>
       <div id="ip-table-wrap"></div>
-      <form class="inline-form" id="add-ip-form">
-        <input name="ip" placeholder="IP" required>
-        ${(node.columns || []).map(c => `<input name="col_${c.id}" placeholder="${escapeAttr(c.name)}">`).join('')}
-        <button type="submit" class="btn-green">+ Añadir IP</button>
-      </form>
-      <div class="form-error" id="ip-form-error"></div>
     </div>
   `;
 
@@ -507,77 +523,91 @@ async function renderRangeModal(nodeId) {
     });
   });
 
-  document.getElementById('open-columns-catalog').addEventListener('click', () => openColumnsModal(nodeId));
-
-  document.getElementById('add-ip-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const f = e.target;
-    const values = {};
-    (node.columns || []).forEach(c => { values[c.id] = f[`col_${c.id}`].value || null; });
-    document.getElementById('ip-form-error').textContent = '';
-    try {
-      await api(`/nodes/${node.id}/ips`, {method: 'POST', body: JSON.stringify({ip: f.ip.value, values})});
-      await refresh();
-      await renderRangeModal(nodeId);
-    } catch (err) {
-      document.getElementById('ip-form-error').textContent = err.message;
-    }
-  });
+  document.getElementById('open-columns-catalog').addEventListener('click', () => openColumnsModal());
 }
+
+function ipToInt(ip) {
+  return ip.split('.').reduce((acc, o) => (acc << 8) + Number(o), 0) >>> 0;
+}
+function intToIp(n) {
+  return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.');
+}
+function hostsOf(cidr) {
+  const [base, lenStr] = cidr.split('/');
+  const len = parseInt(lenStr, 10);
+  const hostBits = 32 - len;
+  const baseInt = ipToInt(base);
+  if (hostBits === 0) return [base];
+  const size = Math.pow(2, hostBits);
+  const networkInt = (baseInt >>> hostBits) * size >>> 0;
+  const noReserved = hostBits <= 1; // /31: sin red/broadcast reservados (RFC 3021)
+  const first = noReserved ? 0 : 1;
+  const last = noReserved ? size - 1 : size - 2;
+  const hosts = [];
+  for (let i = first; i <= last; i++) hosts.push(intToIp((networkInt + i) >>> 0));
+  return hosts;
+}
+
+const IP_TABLE_MAX_ROWS = 1024;
 
 function renderIpTable(node) {
   const wrap = document.getElementById('ip-table-wrap');
   const cols = node.columns || [];
-  const entries = node.ip_entries || [];
-  if (!entries.length) {
-    wrap.innerHTML = '<span class="node-desc">Sin IPs registradas todavía.</span>';
+  if (!cols.length) {
+    wrap.innerHTML = '<span class="node-desc">Añade al menos una columna para poder registrar datos por IP.</span>';
     return;
   }
+
+  const allHosts = hostsOf(node.cidr);
+  const truncated = allHosts.length > IP_TABLE_MAX_ROWS;
+  const hosts = truncated ? allHosts.slice(0, IP_TABLE_MAX_ROWS) : allHosts;
+
+  const entryByIp = {};
+  (node.ip_entries || []).forEach(e => { entryByIp[e.ip] = e; });
+
+  wrap.innerHTML = '';
+  if (truncated) {
+    const note = document.createElement('p');
+    note.className = 'node-desc';
+    note.style.marginBottom = '6px';
+    note.textContent = `Rango muy grande: se muestran las primeras ${IP_TABLE_MAX_ROWS} de ${allHosts.length} IPs.`;
+    wrap.appendChild(note);
+  }
+
   const table = document.createElement('table');
   table.className = 'ip-table';
   table.innerHTML = `
-    <tr><th>IP</th>${cols.map(c => `<th>${escapeHtml(c.name)}</th>`).join('')}<th></th></tr>
-    ${entries.map(e => `
-      <tr data-entry="${e.id}">
-        <td>${e.ip}</td>
-        ${cols.map(c => `<td data-col="${c.id}">${escapeHtml(e.values[String(c.id)] || '')}</td>`).join('')}
-        <td><button class="btn-text" data-action="edit-ip">editar</button> <button class="btn-text" data-action="delete-ip">borrar</button></td>
-      </tr>
-    `).join('')}
+    <tr><th>IP</th>${cols.map(c => `<th>${escapeHtml(c.name)}</th>`).join('')}</tr>
+    ${hosts.map(ip => {
+      const entry = entryByIp[ip];
+      return `<tr data-ip="${ip}">
+        <td>${ip}</td>
+        ${cols.map(c => `<td><input data-col="${c.id}" value="${escapeAttr(entry ? (entry.values[String(c.id)] || '') : '')}"></td>`).join('')}
+      </tr>`;
+    }).join('')}
   `;
-  wrap.innerHTML = '';
   wrap.appendChild(table);
 
-  table.querySelectorAll('[data-action="delete-ip"]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const tr = btn.closest('tr');
-      if (!confirm(`¿Borrar la IP ${tr.children[0].textContent}?`)) return;
-      await api(`/ips/${tr.dataset.entry}`, {method: 'DELETE'});
-      await refresh();
-      await renderRangeModal(node.id);
-    });
-  });
-
-  table.querySelectorAll('[data-action="edit-ip"]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tr = btn.closest('tr');
-      const entryId = tr.dataset.entry;
-      const entry = entries.find(e => String(e.id) === entryId);
-      tr.children[0].innerHTML = `<input value="${escapeAttr(entry.ip)}" name="ip">`;
-      cols.forEach(c => {
-        const cell = tr.querySelector(`td[data-col="${c.id}"]`);
-        cell.innerHTML = `<input value="${escapeAttr(entry.values[String(c.id)] || '')}" name="col_${c.id}">`;
-      });
-      tr.children[tr.children.length - 1].innerHTML = '<button class="btn-blue" data-action="save-ip">Guardar</button>';
-      tr.querySelector('[data-action="save-ip"]').addEventListener('click', async () => {
-        const values = {};
-        cols.forEach(c => { values[c.id] = tr.querySelector(`input[name="col_${c.id}"]`).value || null; });
-        try {
-          await api(`/ips/${entryId}`, {method: 'PATCH', body: JSON.stringify({ip: tr.querySelector('input[name="ip"]').value, values})});
-          await refresh();
-          await renderRangeModal(node.id);
-        } catch (err) { alert(err.message); }
-      });
+  table.querySelectorAll('input[data-col]').forEach(input => {
+    input.addEventListener('blur', async () => {
+      const ip = input.closest('tr').dataset.ip;
+      const columnId = Number(input.dataset.col);
+      input.disabled = true;
+      try {
+        await api(`/nodes/${node.id}/ip-values`, {
+          method: 'PUT',
+          body: JSON.stringify({ip, column_id: columnId, value: input.value || null}),
+        });
+        input.title = '';
+        // se actualiza en memoria para que la vista rápida de la tarjeta
+        // (fuera del modal) quede al día sin recargar ni cerrar el modal
+        loadAll();
+      } catch (err) {
+        input.title = err.message;
+        input.style.outline = '2px solid #c23b4a';
+      } finally {
+        input.disabled = false;
+      }
     });
   });
 }
@@ -611,8 +641,7 @@ async function renderColumnsModal() {
     btn.addEventListener('click', async () => {
       if (!confirm('¿Borrar esta columna del catálogo? Se quitará de todos los rangos que la usen.')) return;
       await api(`/columns/${btn.dataset.col}`, {method: 'DELETE'});
-      await refresh();
-      await renderColumnsModal();
+      await afterCatalogChange();
     });
   });
 
@@ -621,12 +650,21 @@ async function renderColumnsModal() {
     document.getElementById('col-form-error').textContent = '';
     try {
       await api('/columns', {method: 'POST', body: JSON.stringify({name: e.target.name.value})});
-      await refresh();
-      await renderColumnsModal();
+      await afterCatalogChange();
     } catch (err) {
       document.getElementById('col-form-error').textContent = err.message;
     }
   });
+}
+
+// tras crear/borrar una columna del catálogo, refresca tanto esta lista
+// como el desplegable del modal de rango si hay uno abierto detrás
+async function afterCatalogChange() {
+  await refresh();
+  await renderColumnsModal();
+  if (currentRangeModalNodeId !== null) {
+    await renderRangeModal(currentRangeModalNodeId);
+  }
 }
 
 document.getElementById('manage-columns-btn').addEventListener('click', () => openColumnsModal());
