@@ -267,10 +267,7 @@ class MoveIn(BaseModel):
     parent_id: Optional[int] = None
     site: Optional[str] = None
     role: Optional[str] = None
-
-
-class ReorderIn(BaseModel):
-    direction: str
+    before_id: Optional[int] = None
 
 
 class ColumnIn(BaseModel):
@@ -477,7 +474,12 @@ def delete_node(node_id: int, _auth=Depends(require_admin)):
 def move_node(node_id: int, body: MoveIn, _auth=Depends(require_admin)):
     """Mueve un nodo a otro padre (dentro de una agrupación) o a otra
     combinación sede/rol como nodo de primer nivel. Si el nodo es una
-    agrupación, propaga la nueva sede/rol a todos sus descendientes."""
+    agrupación, propaga la nueva sede/rol a todos sus descendientes.
+
+    Pensado para arrastrar y soltar: si se indica `before_id`, el nodo se
+    inserta justo delante de ese hermano en el destino (para reordenar);
+    si no, se añade al final (soltar en el hueco vacío de una celda o de
+    una agrupación)."""
     with get_db() as conn:
         node = conn.execute("SELECT * FROM nodes WHERE id=?", (node_id,)).fetchone()
         if not node:
@@ -499,11 +501,25 @@ def move_node(node_id: int, body: MoveIn, _auth=Depends(require_admin)):
                 raise HTTPException(400, "site/role baliogabeak lehen mailako nodo baterako")
             new_parent_id, new_site, new_role = None, body.site, body.role
 
-        position = next_position(conn, new_parent_id, new_site, new_role)
+        siblings = conn.execute(
+            "SELECT id FROM nodes WHERE parent_id IS ? AND site=? AND role=? AND id != ? ORDER BY position, id",
+            (new_parent_id, new_site, new_role, node_id),
+        ).fetchall()
+        ids = [r["id"] for r in siblings]
+        if body.before_id is not None:
+            if body.before_id not in ids:
+                raise HTTPException(400, "before_id ez da helburuko anaia bat")
+            ids.insert(ids.index(body.before_id), node_id)
+        else:
+            ids.append(node_id)
+
         conn.execute(
-            "UPDATE nodes SET parent_id=?, site=?, role=?, position=? WHERE id=?",
-            (new_parent_id, new_site, new_role, position, node_id),
+            "UPDATE nodes SET parent_id=?, site=?, role=? WHERE id=?",
+            (new_parent_id, new_site, new_role, node_id),
         )
+        for pos, sibling_id in enumerate(ids):
+            conn.execute("UPDATE nodes SET position=? WHERE id=?", (pos, sibling_id))
+
         descendant_ids = get_descendant_ids(conn, node_id)
         if descendant_ids:
             placeholders = ",".join("?" * len(descendant_ids))
@@ -511,34 +527,6 @@ def move_node(node_id: int, body: MoveIn, _auth=Depends(require_admin)):
                 f"UPDATE nodes SET site=?, role=? WHERE id IN ({placeholders})",
                 (new_site, new_role, *descendant_ids),
             )
-    return {"ok": True}
-
-
-@app.post("/api/nodes/{node_id}/reorder")
-def reorder_node(node_id: int, body: ReorderIn, _auth=Depends(require_admin)):
-    """Sube o baja un nodo una posición entre sus hermanos (misma
-    parent_id/site/role). Renumera todo el grupo de hermanos de 0 en
-    adelante, así que también sirve para "sanear" posiciones repetidas."""
-    with get_db() as conn:
-        node = conn.execute("SELECT * FROM nodes WHERE id=?", (node_id,)).fetchone()
-        if not node:
-            raise HTTPException(404, "Ez da aurkitu")
-        siblings = conn.execute(
-            "SELECT id FROM nodes WHERE parent_id IS ? AND site=? AND role=? ORDER BY position, id",
-            (node["parent_id"], node["site"], node["role"]),
-        ).fetchall()
-        if body.direction not in ("up", "down"):
-            raise HTTPException(400, "direction balioak 'up' edo 'down' izan behar du")
-        ids = [r["id"] for r in siblings]
-        idx = ids.index(node_id)
-        if body.direction == "up" and idx > 0:
-            ids[idx - 1], ids[idx] = ids[idx], ids[idx - 1]
-        elif body.direction == "down" and idx < len(ids) - 1:
-            ids[idx + 1], ids[idx] = ids[idx], ids[idx + 1]
-        # si ya está en el extremo correspondiente, no hay nada que hacer
-        # (no es un error, simplemente no se mueve)
-        for pos, sibling_id in enumerate(ids):
-            conn.execute("UPDATE nodes SET position=? WHERE id=?", (pos, sibling_id))
     return {"ok": True}
 
 

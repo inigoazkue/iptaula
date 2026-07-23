@@ -153,6 +153,10 @@
   .node.rango { background: var(--rango-bg); border-color: var(--rango-border); }
   .node.agrupacion { background: var(--group-bg); border-color: var(--group-border); border-style: dashed; }
   .node.search-match { outline: 3px solid var(--search-match); outline-offset: 1px; }
+  .node.dragging { opacity: 0.35; }
+  .node.drop-target { outline: 2px dashed var(--link); outline-offset: 2px; }
+  td.drop-target { outline: 2px dashed var(--link); outline-offset: -2px; }
+  .node-children.drop-target { outline: 2px dashed var(--link); outline-offset: -2px; border-radius: 6px; }
   .node-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
   .node-name { font-weight: 700; font-size: 0.88rem; }
   .node-desc { color: var(--text-secondary); font-size: 0.76rem; display: block; margin-top: 2px; }
@@ -604,63 +608,18 @@ function collectDescendantIds(node) {
   return acc;
 }
 
-// todas las agrupaciones del árbol salvo el propio nodo y sus descendientes
-// (no tendría sentido, y el backend lo rechazaría igualmente)
-function movableGroups(excludeId, excludeDescendantIds) {
-  const acc = [];
-  function walk(node, path) {
-    if (node.node_type === 'agrupacion' && node.id !== excludeId && !excludeDescendantIds.has(node.id)) {
-      acc.push({id: node.id, label: `${path} / ${node.name}`});
-    }
-    const childPath = node.node_type === 'agrupacion' ? `${path} / ${node.name}` : path;
-    node.children.forEach(c => walk(c, childPath));
-  }
-  for (const site of SITES) for (const role of ROLES) {
-    (TREE[site.slug][role.slug] || []).forEach(n => walk(n, `${site.label} · ${role.label}`));
-  }
-  return acc;
-}
+// ---- arrastrar y soltar ----
+// estado global mínimo del arrastre en curso (más simple y fiable entre
+// navegadores que depender de dataTransfer.getData durante el dragover)
+let draggingNode = null;
 
-function buildMoveForm(node, onDone) {
-  const excludeIds = collectDescendantIds(node);
-  const groups = movableGroups(node.id, excludeIds);
-
-  const form = document.createElement('form');
-  form.className = 'inline-form';
-  form.innerHTML = `
-    <select name="destination" style="flex:1 1 100%;">
-      <optgroup label="Lehen mailan (sede / sare mota)">
-        ${SITES.flatMap(s => ROLES.map(r =>
-          `<option value="top:${s.slug}:${r.slug}" ${s.slug === node.site && r.slug === node.role && !node.parent_id ? 'selected' : ''}>${escapeHtml(s.label)} · ${escapeHtml(r.label)}</option>`
-        )).join('')}
-      </optgroup>
-      ${groups.length ? `
-        <optgroup label="Talde baten barruan">
-          ${groups.map(g => `<option value="group:${g.id}">${escapeHtml(g.label)}</option>`).join('')}
-        </optgroup>
-      ` : ''}
-    </select>
-    <button type="submit" class="btn-blue">Mugitu</button>
-    <button type="button" class="btn-neutral cancel">Utzi</button>
-  `;
-  form.querySelector('.cancel').addEventListener('click', () => onDone(false));
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    form.querySelectorAll('.form-error').forEach(el => el.remove());
-    const value = form.destination.value;
-    const payload = value.startsWith('top:')
-      ? (([, site, role]) => ({parent_id: null, site, role}))(value.split(':'))
-      : {parent_id: Number(value.split(':')[1])};
-    try {
-      await api(`/nodes/${node.id}/move`, {method: 'POST', body: JSON.stringify(payload)});
-      await onDone(true);
-    } catch (err) {
-      const p = document.createElement('div');
-      p.className = 'form-error'; p.textContent = err.message;
-      form.appendChild(p);
-    }
-  });
-  return form;
+async function performMove(payload, onError) {
+  try {
+    await api(`/nodes/${draggingNode.id}/move`, {method: 'POST', body: JSON.stringify(payload)});
+    await refresh();
+  } catch (err) {
+    if (onError) onError(err); else alert(err.message);
+  }
 }
 
 function countDescendants(node) {
@@ -709,9 +668,6 @@ function renderNode(node, site, role) {
     <div class="node-head">
       <span class="node-name">${escapeHtml(node.name)}</span>
       <span class="node-ctrl">
-        ${isAdmin() ? '<button class="btn-text" data-action="up" title="Gora">▲</button>' : ''}
-        ${isAdmin() ? '<button class="btn-text" data-action="down" title="Behera">▼</button>' : ''}
-        ${isAdmin() ? '<button class="btn-text" data-action="move">mugitu</button>' : ''}
         ${isAdmin() && node.node_type === 'agrupacion' ? '<button class="btn-text" data-action="edit">editatu</button>' : ''}
         ${isAdmin() ? '<button class="btn-text" data-action="delete">ezabatu</button>' : ''}
       </span>
@@ -741,6 +697,32 @@ function renderNode(node, site, role) {
         const form = buildEditForm(node, async (changed) => { changed ? await refresh() : form.replaceWith(body); });
         body.replaceWith(form);
       });
+
+      // soltar en el hueco vacío del área desplegada del grupo (no sobre
+      // una tarjeta hija concreta) = añadir como último hijo de este grupo.
+      // Para la propagación siempre: si no, el drop burbujearía hasta la
+      // propia tarjeta del grupo y se ejecutarían las dos acciones a la vez.
+      childrenBox.addEventListener('dragover', (e) => {
+        if (!draggingNode || draggingNode.id === node.id) return;
+        e.preventDefault();
+        e.stopPropagation();
+        childrenBox.classList.add('drop-target');
+      });
+      childrenBox.addEventListener('dragleave', (e) => {
+        e.stopPropagation();
+        childrenBox.classList.remove('drop-target');
+      });
+      childrenBox.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        childrenBox.classList.remove('drop-target');
+        if (!draggingNode || draggingNode.id === node.id) return;
+        if (collectDescendantIds(draggingNode).has(node.id)) {
+          alert('Ezin da talde bat bere ondorengo baten barruan utzi.');
+          return;
+        }
+        await performMove({parent_id: node.id});
+      });
     }
   }
 
@@ -749,20 +731,46 @@ function renderNode(node, site, role) {
       e.stopPropagation();
       deleteNode(node);
     });
-    body.querySelector('[data-action="up"]').addEventListener('click', async (e) => {
+  }
+
+  // arrastrar y soltar (solo admin): la tarjeta entera es arrastrable;
+  // soltar SOBRE otra tarjeta la inserta justo delante de esa tarjeta
+  // (reordena o cambia de sede/rol/grupo según donde esté esa tarjeta);
+  // si es una agrupación, todo lo que tiene dentro se mueve con ella.
+  if (isAdmin()) {
+    el.draggable = true;
+    el.addEventListener('dragstart', (e) => {
       e.stopPropagation();
-      await api(`/nodes/${node.id}/reorder`, {method: 'POST', body: JSON.stringify({direction: 'up'})});
-      await refresh();
+      draggingNode = node;
+      el.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(node.id));
     });
-    body.querySelector('[data-action="down"]').addEventListener('click', async (e) => {
+    el.addEventListener('dragend', (e) => {
       e.stopPropagation();
-      await api(`/nodes/${node.id}/reorder`, {method: 'POST', body: JSON.stringify({direction: 'down'})});
-      await refresh();
+      el.classList.remove('dragging');
+      draggingNode = null;
     });
-    body.querySelector('[data-action="move"]').addEventListener('click', (e) => {
+    el.addEventListener('dragover', (e) => {
+      if (!draggingNode || draggingNode.id === node.id) return;
+      e.preventDefault();
       e.stopPropagation();
-      const form = buildMoveForm(node, async (changed) => { changed ? await refresh() : form.replaceWith(body); });
-      body.replaceWith(form);
+      el.classList.add('drop-target');
+    });
+    el.addEventListener('dragleave', (e) => {
+      e.stopPropagation();
+      el.classList.remove('drop-target');
+    });
+    el.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      el.classList.remove('drop-target');
+      if (!draggingNode || draggingNode.id === node.id) return;
+      if (collectDescendantIds(draggingNode).has(node.id)) {
+        alert('Ezin da talde bat bere ondorengo baten gainean utzi.');
+        return;
+      }
+      await performMove({parent_id: node.parent_id, site: node.site, role: node.role, before_id: node.id});
     });
   }
 
@@ -804,6 +812,24 @@ function renderGrid() {
       const td = document.createElement('td');
       (TREE[site.slug][role.slug] || []).forEach(node => td.appendChild(renderNode(node, site.slug, role.slug)));
       td.appendChild(addButtons(null, site.slug, role.slug, refresh));
+
+      // soltar en el hueco vacío de la celda (no sobre una tarjeta
+      // concreta) = pasar a primer nivel de esa sede/tipo de red
+      if (isAdmin()) {
+        td.addEventListener('dragover', (e) => {
+          if (!draggingNode) return;
+          e.preventDefault();
+          td.classList.add('drop-target');
+        });
+        td.addEventListener('dragleave', () => td.classList.remove('drop-target'));
+        td.addEventListener('drop', async (e) => {
+          e.preventDefault();
+          td.classList.remove('drop-target');
+          if (!draggingNode) return;
+          await performMove({parent_id: null, site: site.slug, role: role.slug});
+        });
+      }
+
       tr.appendChild(td);
     }
     table.appendChild(tr);
