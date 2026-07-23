@@ -180,9 +180,21 @@ def seed_defaults(conn):
             )
 
 
+def migrate_schema(conn):
+    """`CREATE TABLE IF NOT EXISTS` no modifica una tabla que ya existe con
+    un esquema antiguo. `sessions` cambió (se le añadió user_id) al pasar de
+    un único admin a usuarios con rol; en instalaciones previas hay que
+    recrearla. Las sesiones son efímeras, así que esto solo obliga a volver
+    a iniciar sesión, no hay pérdida de datos de la aplicación."""
+    cols = [r["name"] for r in conn.execute("PRAGMA table_info(sessions)")]
+    if cols and "user_id" not in cols:
+        conn.execute("DROP TABLE sessions")
+
+
 def init_db():
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     with get_db() as conn:
+        migrate_schema(conn)
         conn.executescript(SCHEMA)
         seed_defaults(conn)
 
