@@ -5,3 +5,4 @@ IPs_10_114_159.htm,Virtualizazioa / Elkartrukeak,bilbo,gestioa,Sistema Virtual,1
 IPs_10_114_159.htm,Garapeneko ekipo fisikoak,bilbo,gestioa,Sistema Virtual,10.217.159.0/24,IP=Hostname,17,cargado
 IPs_10_114_159.htm,IBM babeskopia kabina,bilbo,gestioa,Sistema Virtual,10.110.80.0/24,IP=Hostname,18,cargado
 IPs_10_114_159.htm,Web switch/ostalariak,bilbo,gestioa,Sistema Virtual,10.119.80.0/24,IP=Hostname,19,cargado
+IPs_10_114_159.htm,Edukien sarea (10.124.159.x),bilbo,gestioa,Sistema Virtual,10.124.159.0/24,"IP=Hostname; Oharrak=nota puntual",20,cargado
