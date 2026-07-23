@@ -117,12 +117,15 @@
   .node-cols { color: var(--text-muted); font-size: 0.74rem; display: block; margin-top: 2px; }
   .node-ctrl { display: flex; gap: 8px; white-space: nowrap; }
 
-  .ip-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
-  .ip-pill {
-    font-size: 0.68rem; padding: 2px 7px; border-radius: 10px;
-    background: var(--surface-1); border: 1px solid var(--border); color: var(--text-secondary);
-    font-family: ui-monospace, monospace;
+  .mini-ip-table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  .mini-ip-table th, .mini-ip-table td {
+    font-size: 0.68rem; padding: 2px 5px; text-align: left;
+    border: none; border-bottom: 1px solid var(--gridline);
+    font-family: ui-monospace, monospace; background: none;
   }
+  .mini-ip-table th { font-family: system-ui, sans-serif; color: var(--text-muted); font-weight: 600; }
+  .mini-ip-table tr:last-child td { border-bottom: none; }
+  .mini-ip-more { font-size: 0.68rem; color: var(--text-muted); display: block; margin-top: 4px; }
 
   .node-children { margin: 8px 0 2px 14px; padding-left: 10px; border-left: 2px solid var(--gridline); cursor: default; }
   .node-add-row {
@@ -329,11 +332,22 @@ function renderNode(node, site, role) {
   el.className = `node ${node.node_type}`;
 
   const body = document.createElement('div');
-  const pills = (node.ip_entries || []).map(e => {
-    const firstVal = node.columns && node.columns[0] ? e.values[String(node.columns[0].id)] : null;
-    return `<span class="ip-pill">${e.ip}${firstVal ? ' · ' + escapeHtml(firstVal) : ''}</span>`;
-  }).join('');
-  const colNames = (node.columns || []).map(c => escapeHtml(c.name)).join(', ');
+  const cols = node.columns || [];
+  const entries = node.ip_entries || [];
+  const MAX_PREVIEW_ROWS = 6;
+
+  let ipPreview = '';
+  if (node.node_type === 'rango' && entries.length) {
+    const shown = entries.slice(0, MAX_PREVIEW_ROWS);
+    ipPreview = `
+      <table class="mini-ip-table">
+        <tr><th>IP</th>${cols.map(c => `<th>${escapeHtml(c.name)}</th>`).join('')}</tr>
+        ${shown.map(e => `<tr><td>${e.ip}</td>${cols.map(c => `<td>${escapeHtml(e.values[String(c.id)] || '')}</td>`).join('')}</tr>`).join('')}
+      </table>
+      ${entries.length > MAX_PREVIEW_ROWS ? `<span class="mini-ip-more">+${entries.length - MAX_PREVIEW_ROWS} más - ábrelo para verlas todas</span>` : ''}
+    `;
+  }
+  const colNames = cols.map(c => escapeHtml(c.name)).join(', ');
 
   body.innerHTML = `
     <div class="node-head">
@@ -345,8 +359,8 @@ function renderNode(node, site, role) {
     </div>
     ${node.description ? `<span class="node-desc">${escapeHtml(node.description)}</span>` : ''}
     ${node.node_type === 'rango' ? `<span class="node-cidr">${node.cidr}</span>` : ''}
-    ${node.node_type === 'rango' && colNames ? `<span class="node-cols">Zutabeak: ${colNames}</span>` : ''}
-    ${node.node_type === 'rango' && pills ? `<div class="ip-pills">${pills}</div>` : ''}
+    ${node.node_type === 'rango' && !entries.length && colNames ? `<span class="node-cols">Zutabeak: ${colNames}</span>` : ''}
+    ${ipPreview}
   `;
   el.appendChild(body);
 
