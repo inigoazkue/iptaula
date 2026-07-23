@@ -218,7 +218,7 @@
   table.ip-table input { width: 100%; font-size: 0.78rem; padding: 4px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface-1); color: var(--text-primary); }
   table.ip-table tr.ip-row-free  { background: var(--row-free); }
   table.ip-table tr.ip-row-used  { background: var(--row-used); }
-  table.ip-table .ping-col { width: 30px; text-align: center; }
+  table.ip-table .ping-col { width: 44px; text-align: center; white-space: nowrap; }
   button.ping-btn {
     width: 15px; height: 15px; border-radius: 50%; padding: 0; margin: 0 auto; display: block;
     border: 1px solid var(--border); background: var(--text-muted); opacity: 0.45;
@@ -1116,7 +1116,7 @@ function renderIpTable(node) {
   const table = document.createElement('table');
   table.className = 'ip-table';
   table.innerHTML = `
-    <tr><th>IP</th>${isAuthenticated ? '<th class="ping-col"></th>' : ''}${cols.map(c => `<th>${escapeHtml(c.name)}</th>`).join('')}</tr>
+    <tr><th>IP</th>${isAuthenticated ? '<th class="ping-col">Ping</th>' : ''}${cols.map(c => `<th>${escapeHtml(c.name)}</th>`).join('')}</tr>
     ${hosts.map(ip => {
       const entry = entryByIp[ip];
       const cells = cols.map(c => {
