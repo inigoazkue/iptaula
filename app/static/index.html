@@ -374,10 +374,14 @@ function renderNode(node, site, role) {
     deleteNode(node);
   });
 
-  // clic en toda la tarjeta; se para la propagación para que una tarjeta
-  // hija no dispare también el toggle de la agrupación que la contiene
+  // clic en toda la tarjeta. Se para la propagación siempre (para que una
+  // tarjeta hija, o cualquier botón/input dentro - alta, edición, etc. -
+  // no disparen también el toggle de la agrupación que la contiene), pero
+  // solo se ejecuta la acción principal si el clic no viene de un control
+  // interactivo (botón, input, select, formulario...).
   el.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (e.target.closest('button, input, select, textarea, a, form')) return;
     if (node.node_type === 'rango') {
       openRangeModal(node.id);
     } else if (childrenBox) {
