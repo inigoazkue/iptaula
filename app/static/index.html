@@ -847,7 +847,7 @@ function renderNode(node, site, role, siblings) {
     }
   }
 
-  if (isAdmin()) {
+  if (canDelete()) {
     body.querySelector('[data-action="delete"]').addEventListener('click', (e) => {
       e.stopPropagation();
       deleteNode(node);
