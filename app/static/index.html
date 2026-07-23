@@ -25,6 +25,10 @@
     --btn-green:    #c8ecd3; --btn-green-hover: #aee0bd; --btn-green-ink: #205a34;
     --btn-pink:     #f8ccd2; --btn-pink-hover: #f3aeb8; --btn-pink-ink: #6e2430;
     --btn-neutral:  #eceafc; --btn-neutral-hover: #ddd9f7; --btn-neutral-ink: #33314a;
+
+    --row-free: #eaf7ec;
+    --row-used: #fdf0e0;
+    --search-match: #fff2a8;
   }
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])) {
@@ -39,6 +43,7 @@
       --btn-green: #23402c; --btn-green-hover: #2d5238; --btn-green-ink: #c8ecd3;
       --btn-pink: #4a2830; --btn-pink-hover: #5e323c; --btn-pink-ink: #f8ccd2;
       --btn-neutral: #2b2940; --btn-neutral-hover: #38355210; --btn-neutral-ink: #eceafc;
+      --row-free: #1d3320; --row-used: #3a2c18; --search-match: #4a4420;
     }
   }
   :root[data-theme="dark"] {
@@ -53,6 +58,7 @@
     --btn-green: #23402c; --btn-green-hover: #2d5238; --btn-green-ink: #c8ecd3;
     --btn-pink: #4a2830; --btn-pink-hover: #5e323c; --btn-pink-ink: #f8ccd2;
     --btn-neutral: #2b2940; --btn-neutral-hover: #383552; --btn-neutral-ink: #eceafc;
+    --row-free: #1d3320; --row-used: #3a2c18; --search-match: #4a4420;
   }
 
   * { box-sizing: border-box; }
@@ -167,7 +173,12 @@
   .col-chip button { background: none; padding: 0; color: inherit; font-weight: 700; }
 
   table.ip-table th, table.ip-table td { font-size: 0.78rem; padding: 6px 8px; }
-  table.ip-table input { width: 100%; font-size: 0.78rem; padding: 4px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--page); color: var(--text-primary); }
+  table.ip-table input { width: 100%; font-size: 0.78rem; padding: 4px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface-1); color: var(--text-primary); }
+  table.ip-table tr.ip-row-free  { background: var(--row-free); }
+  table.ip-table tr.ip-row-used  { background: var(--row-used); }
+
+  .node.search-match { outline: 3px solid var(--search-match); outline-offset: 1px; }
+  .mini-ip-table tr.ip-row-search-match td { background: var(--search-match); }
 
   .catalog-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--gridline); font-size: 0.85rem; }
   .catalog-row:last-child { border-bottom: none; }
@@ -182,7 +193,10 @@
     <h1>IP Taula</h1>
     <p class="subtitle">Sedeen eta sare moten araberako sare-taula.</p>
   </div>
-  <button class="btn-neutral" id="manage-columns-btn">Zutabeak kudeatu</button>
+  <div style="display:flex; gap:10px; align-items:center;">
+    <input type="text" id="search-box" placeholder="Buscar IP, nombre, hostname..." style="padding:7px 12px; border:1px solid var(--border); border-radius:8px; background:var(--surface-1); color:var(--text-primary); font-size:0.82rem; min-width:220px;">
+    <button class="btn-neutral" id="manage-columns-btn">Zutabeak kudeatu</button>
+  </div>
 </div>
 
 <div id="status">Kargatzen...</div>
@@ -216,6 +230,52 @@ async function api(path, opts) {
 
 let TREE = null;
 let COLUMNS = [];
+const expandedGroups = new Set(); // ids de agrupaciones desplegadas, sobrevive a los re-render
+let currentSearch = {matchedNodeIds: new Set(), expandIds: new Set(), ipMatches: new Map()};
+
+// Recorre todo el árbol buscando el texto en nombre/descripción/cidr de
+// cada nodo, y en la IP o los valores de columna de cada entrada. Devuelve
+// qué nodos resaltar, qué agrupaciones desplegar para llegar hasta ellos,
+// y qué IPs concretas resaltar dentro de la vista previa de cada rango.
+function computeSearch(query) {
+  const q = query.trim().toLowerCase();
+  const result = {matchedNodeIds: new Set(), expandIds: new Set(), ipMatches: new Map()};
+  if (!q) return result;
+
+  function visit(node, ancestors) {
+    let selfMatch = node.name.toLowerCase().includes(q) || (node.description || '').toLowerCase().includes(q);
+    if (node.node_type === 'rango') {
+      if ((node.cidr || '').toLowerCase().includes(q)) selfMatch = true;
+      const matchedIps = new Set();
+      (node.ip_entries || []).forEach(e => {
+        let ipMatch = e.ip.toLowerCase().includes(q);
+        if (!ipMatch) {
+          for (const val of Object.values(e.values)) {
+            if (val && val.toLowerCase().includes(q)) { ipMatch = true; break; }
+          }
+        }
+        if (ipMatch) matchedIps.add(e.ip);
+      });
+      if (matchedIps.size) {
+        result.ipMatches.set(node.id, matchedIps);
+        selfMatch = true;
+      }
+    }
+    if (selfMatch) {
+      result.matchedNodeIds.add(node.id);
+      ancestors.forEach(a => result.expandIds.add(a));
+    }
+    if (node.node_type === 'agrupacion') {
+      const childAncestors = [...ancestors, node.id];
+      node.children.forEach(c => visit(c, childAncestors));
+    }
+  }
+
+  for (const site of SITES) for (const role of ROLES) {
+    TREE[site.slug][role.slug].forEach(n => visit(n, []));
+  }
+  return result;
+}
 
 async function loadAll() {
   [TREE, COLUMNS] = await Promise.all([api('/tree'), api('/columns')]);
@@ -329,20 +389,26 @@ async function deleteNode(node) {
 
 function renderNode(node, site, role) {
   const el = document.createElement('div');
-  el.className = `node ${node.node_type}`;
+  const isSearchMatch = currentSearch.matchedNodeIds.has(node.id);
+  el.className = `node ${node.node_type}${isSearchMatch ? ' search-match' : ''}`;
 
   const body = document.createElement('div');
   const cols = node.columns || [];
   const entries = node.ip_entries || [];
+  const matchedIps = currentSearch.ipMatches.get(node.id);
   const MAX_PREVIEW_ROWS = 6;
 
   let ipPreview = '';
   if (node.node_type === 'rango' && entries.length) {
-    const shown = entries.slice(0, MAX_PREVIEW_ROWS);
+    let ordered = entries;
+    if (matchedIps && matchedIps.size) {
+      ordered = [...entries].sort((a, b) => (matchedIps.has(b.ip) ? 1 : 0) - (matchedIps.has(a.ip) ? 1 : 0));
+    }
+    const shown = ordered.slice(0, MAX_PREVIEW_ROWS);
     ipPreview = `
       <table class="mini-ip-table">
         <tr><th>IP</th>${cols.map(c => `<th>${escapeHtml(c.name)}</th>`).join('')}</tr>
-        ${shown.map(e => `<tr><td>${e.ip}</td>${cols.map(c => `<td>${escapeHtml(e.values[String(c.id)] || '')}</td>`).join('')}</tr>`).join('')}
+        ${shown.map(e => `<tr class="${matchedIps && matchedIps.has(e.ip) ? 'ip-row-search-match' : ''}"><td>${e.ip}</td>${cols.map(c => `<td>${escapeHtml(e.values[String(c.id)] || '')}</td>`).join('')}</tr>`).join('')}
       </table>
       ${entries.length > MAX_PREVIEW_ROWS ? `<span class="mini-ip-more">+${entries.length - MAX_PREVIEW_ROWS} más - ábrelo para verlas todas</span>` : ''}
     `;
@@ -368,7 +434,7 @@ function renderNode(node, site, role) {
   if (node.node_type === 'agrupacion') {
     childrenBox = document.createElement('div');
     childrenBox.className = 'node-children';
-    childrenBox.style.display = 'none';
+    childrenBox.style.display = (expandedGroups.has(node.id) || currentSearch.expandIds.has(node.id)) ? 'block' : 'none';
     node.children.forEach(child => childrenBox.appendChild(renderNode(child, site, role)));
     const addRow = document.createElement('div');
     addRow.className = 'node-add-row';
@@ -399,7 +465,9 @@ function renderNode(node, site, role) {
     if (node.node_type === 'rango') {
       openRangeModal(node.id);
     } else if (childrenBox) {
-      childrenBox.style.display = childrenBox.style.display === 'none' ? 'block' : 'none';
+      const willShow = childrenBox.style.display === 'none';
+      childrenBox.style.display = willShow ? 'block' : 'none';
+      if (willShow) expandedGroups.add(node.id); else expandedGroups.delete(node.id);
     }
   });
 
@@ -461,7 +529,7 @@ async function openRangeModal(nodeId) {
 
 document.getElementById('range-modal').addEventListener('close', () => {
   currentRangeModalNodeId = null;
-  refresh();
+  refresh().catch(err => { document.getElementById('status').textContent = `Errorea: ${err.message}`; document.getElementById('status').style.display = 'block'; });
 });
 
 async function renderRangeModal(nodeId) {
@@ -598,7 +666,7 @@ function renderIpTable(node) {
     <tr><th>IP</th>${cols.map(c => `<th>${escapeHtml(c.name)}</th>`).join('')}</tr>
     ${hosts.map(ip => {
       const entry = entryByIp[ip];
-      return `<tr data-ip="${ip}">
+      return `<tr data-ip="${ip}" class="${entry ? 'ip-row-used' : 'ip-row-free'}">
         <td>${ip}</td>
         ${cols.map(c => `<td><input data-col="${c.id}" value="${escapeAttr(entry ? (entry.values[String(c.id)] || '') : '')}"></td>`).join('')}
       </tr>`;
@@ -608,7 +676,8 @@ function renderIpTable(node) {
 
   table.querySelectorAll('input[data-col]').forEach(input => {
     input.addEventListener('blur', async () => {
-      const ip = input.closest('tr').dataset.ip;
+      const tr = input.closest('tr');
+      const ip = tr.dataset.ip;
       const columnId = Number(input.dataset.col);
       input.disabled = true;
       try {
@@ -617,6 +686,10 @@ function renderIpTable(node) {
           body: JSON.stringify({ip, column_id: columnId, value: input.value || null}),
         });
         input.title = '';
+        input.style.outline = '';
+        const stillHasData = [...tr.querySelectorAll('input[data-col]')].some(i => i.value.trim() !== '');
+        tr.classList.toggle('ip-row-used', stillHasData);
+        tr.classList.toggle('ip-row-free', !stillHasData);
         // se actualiza en memoria para que la vista rápida de la tarjeta
         // (fuera del modal) quede al día sin recargar ni cerrar el modal
         loadAll();
@@ -686,6 +759,16 @@ async function afterCatalogChange() {
 }
 
 document.getElementById('manage-columns-btn').addEventListener('click', () => openColumnsModal());
+
+let searchDebounce;
+document.getElementById('search-box').addEventListener('input', (e) => {
+  clearTimeout(searchDebounce);
+  const query = e.target.value;
+  searchDebounce = setTimeout(() => {
+    currentSearch = computeSearch(query);
+    renderGrid();
+  }, 200);
+});
 
 refresh().catch(err => {
   document.getElementById('status').textContent = `Errorea: ${err.message}`;
