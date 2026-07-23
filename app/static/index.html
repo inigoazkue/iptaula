@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="eu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IP Taula</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --border:         rgba(11,11,11,0.10);
+    --link:     #2a78d6;
+    --group-bg: #f3f1ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface-1: #1a1a19; --page: #0d0d0d;
+      --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #898781;
+      --gridline: #2c2c2a; --border: rgba(255,255,255,0.10);
+      --link: #3987e5; --group-bg: #232322;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-1: #1a1a19; --page: #0d0d0d;
+    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #898781;
+    --gridline: #2c2c2a; --border: rgba(255,255,255,0.10);
+    --link: #3987e5; --group-bg: #232322;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    background: var(--page); color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--text-secondary); margin: 0 0 20px; font-size: 0.9rem; }
+
+  table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+  th, td {
+    border: 1px solid var(--gridline); vertical-align: top;
+    padding: 10px; font-size: 0.85rem;
+  }
+  th {
+    background: var(--surface-1); color: var(--text-secondary);
+    font-weight: 600; text-align: left;
+  }
+  th:first-child { width: 130px; }
+
+  .cell-actions { display: flex; gap: 10px; margin-bottom: 8px; }
+  .add-link {
+    font-size: 0.72rem; color: var(--link); text-decoration: none;
+    background: none; border: none; cursor: pointer; padding: 0;
+  }
+  .add-link:hover { text-decoration: underline; }
+
+  .node {
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 8px; margin-bottom: 6px; background: var(--surface-1);
+  }
+  .node.agrupacion { background: var(--group-bg); border-style: dashed; }
+  .node-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+  .node-name { font-weight: 600; font-size: 0.85rem; cursor: default; }
+  .node.agrupacion > .node-head .node-name { cursor: pointer; }
+  .node-desc { color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 2px; }
+  .node-cidr { color: var(--text-secondary); font-size: 0.78rem; font-family: ui-monospace, monospace; margin-top: 3px; }
+  .node-ctrl { display: flex; gap: 6px; white-space: nowrap; }
+  .icon-btn {
+    font-size: 0.68rem; color: var(--text-muted); background: none; border: none;
+    cursor: pointer; padding: 0; text-decoration: none;
+  }
+  .icon-btn:hover { color: var(--link); }
+  .node-children { margin: 8px 0 2px 14px; padding-left: 10px; border-left: 2px solid var(--gridline); }
+  .node-add-row { display: flex; gap: 10px; margin-top: 6px; }
+
+  form.inline-form {
+    display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0;
+    padding: 6px; border: 1px solid var(--border); border-radius: 6px;
+  }
+  form.inline-form input {
+    font-size: 0.78rem; padding: 4px 6px; border: 1px solid var(--border);
+    border-radius: 4px; background: var(--surface-1); color: var(--text-primary);
+  }
+  form.inline-form input[name="name"] { flex: 1; min-width: 100px; }
+  form.inline-form input[name="cidr"] { width: 130px; }
+  form.inline-form input[name="description"] { flex: 2; min-width: 120px; }
+  form.inline-form button {
+    font-size: 0.78rem; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--link);
+    background: var(--link); color: #fff; cursor: pointer;
+  }
+  form.inline-form .cancel { border-color: var(--border); background: var(--surface-1); color: var(--text-primary); }
+  .form-error { color: #d03b3b; font-size: 0.72rem; width: 100%; }
+
+  #status { color: var(--text-muted); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+<h1>IP Taula</h1>
+<p class="subtitle">Sedeen eta sare moten araberako sare-taula (matriz de sedes x tipo de red).</p>
+
+<div id="status">Kargatzen...</div>
+<table id="grid" style="display:none;"></table>
+
+<script>
+const SITES = [
+  {slug: 'bilbo', label: 'Bilbo'},
+  {slug: 'miramon', label: 'Miramon'},
+  {slug: 'gasteiz', label: 'Gasteiz'},
+  {slug: 'irunea', label: 'Iruñea'},
+  {slug: 'besteak', label: 'Besteak'},
+];
+const ROLES = [
+  {slug: 'gestioa', label: 'Gestioa'},
+  {slug: 'edukiak', label: 'Edukiak'},
+  {slug: 'produkziorako_sareak', label: 'Produkziorako sareak'},
+];
+
+async function api(path, opts) {
+  const resp = await fetch(`/api${path}`, {
+    headers: {'Content-Type': 'application/json'},
+    ...opts,
+  });
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}));
+    throw new Error(body.detail || `HTTP ${resp.status}`);
+  }
+  return resp.status === 204 ? null : resp.json();
+}
+
+let TREE = null;
+
+async function loadTree() {
+  TREE = await api('/tree');
+}
+
+async function refresh() {
+  await loadTree();
+  renderGrid();
+}
+
+function addButtons(parentId, site, role, onDone) {
+  const wrap = document.createElement('div');
+  wrap.className = 'cell-actions';
+  const addRango = document.createElement('button');
+  addRango.className = 'add-link';
+  addRango.textContent = '+ rango';
+  const addGroup = document.createElement('button');
+  addGroup.className = 'add-link';
+  addGroup.textContent = '+ agrupación';
+  wrap.append(addRango, addGroup);
+
+  addRango.addEventListener('click', () => wrap.replaceWith(buildForm('rango', parentId, site, role, onDone, () => wrap)));
+  addGroup.addEventListener('click', () => wrap.replaceWith(buildForm('agrupacion', parentId, site, role, onDone, () => wrap)));
+  return wrap;
+}
+
+function buildForm(nodeType, parentId, site, role, onDone, getOriginal) {
+  const form = document.createElement('form');
+  form.className = 'inline-form';
+  form.innerHTML = `
+    <input name="name" placeholder="Nombre" required>
+    ${nodeType === 'rango' ? '<input name="cidr" placeholder="10.1.2.0/24" required>' : ''}
+    <input name="description" placeholder="Descripción (opcional)">
+    <button type="submit">Guardar</button>
+    <button type="button" class="cancel">Cancelar</button>
+  `;
+  form.querySelector('.cancel').addEventListener('click', () => form.replaceWith(getOriginal()));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    form.querySelectorAll('.form-error').forEach(el => el.remove());
+    try {
+      await api('/nodes', {
+        method: 'POST',
+        body: JSON.stringify({
+          parent_id: parentId,
+          site: parentId === null ? site : undefined,
+          role: parentId === null ? role : undefined,
+          node_type: nodeType,
+          name: form.name.value,
+          description: form.description.value || null,
+          cidr: nodeType === 'rango' ? form.cidr.value : null,
+        }),
+      });
+      await onDone();
+    } catch (err) {
+      const p = document.createElement('div');
+      p.className = 'form-error';
+      p.textContent = err.message;
+      form.appendChild(p);
+    }
+  });
+  return form;
+}
+
+function buildEditForm(node, onDone) {
+  const form = document.createElement('form');
+  form.className = 'inline-form';
+  form.innerHTML = `
+    <input name="name" value="${escapeAttr(node.name)}" required>
+    ${node.node_type === 'rango' ? `<input name="cidr" value="${escapeAttr(node.cidr || '')}" required>` : ''}
+    <input name="description" value="${escapeAttr(node.description || '')}" placeholder="Descripción (opcional)">
+    <button type="submit">Guardar</button>
+    <button type="button" class="cancel">Cancelar</button>
+  `;
+  form.querySelector('.cancel').addEventListener('click', () => onDone(false));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    form.querySelectorAll('.form-error').forEach(el => el.remove());
+    try {
+      await api(`/nodes/${node.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: form.name.value,
+          description: form.description.value || null,
+          cidr: node.node_type === 'rango' ? form.cidr.value : null,
+        }),
+      });
+      await onDone(true);
+    } catch (err) {
+      const p = document.createElement('div');
+      p.className = 'form-error';
+      p.textContent = err.message;
+      form.appendChild(p);
+    }
+  });
+  return form;
+}
+
+function escapeAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+function countDescendants(node) {
+  return node.children.reduce((acc, c) => acc + 1 + countDescendants(c), 0);
+}
+
+function renderNode(node, site, role) {
+  const el = document.createElement('div');
+  el.className = `node ${node.node_type}`;
+
+  const body = document.createElement('div');
+  body.innerHTML = `
+    <div class="node-head">
+      <span class="node-name">${node.name}</span>
+      <span class="node-ctrl">
+        <button class="icon-btn" data-action="edit">editar</button>
+        <button class="icon-btn" data-action="delete">borrar</button>
+      </span>
+    </div>
+    ${node.description ? `<span class="node-desc">${node.description}</span>` : ''}
+    ${node.node_type === 'rango' ? `<span class="node-cidr">${node.cidr}</span>` : ''}
+  `;
+  el.appendChild(body);
+
+  let childrenBox = null;
+  if (node.node_type === 'agrupacion') {
+    childrenBox = document.createElement('div');
+    childrenBox.className = 'node-children';
+    childrenBox.style.display = 'none';
+    node.children.forEach(child => childrenBox.appendChild(renderNode(child, site, role)));
+    const addRow = document.createElement('div');
+    addRow.className = 'node-add-row';
+    addRow.appendChild(addButtons(node.id, site, role, refresh));
+    childrenBox.appendChild(addRow);
+    el.appendChild(childrenBox);
+
+    body.querySelector('.node-name').addEventListener('click', () => {
+      childrenBox.style.display = childrenBox.style.display === 'none' ? 'block' : 'none';
+    });
+  }
+
+  body.querySelector('[data-action="edit"]').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const form = buildEditForm(node, async (changed) => {
+      if (changed) { await refresh(); } else { form.replaceWith(body); }
+    });
+    body.replaceWith(form);
+  });
+
+  body.querySelector('[data-action="delete"]').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const n = countDescendants(node);
+    const msg = n > 0
+      ? `"${node.name}" contiene ${n} elemento(s) dentro. ¿Borrar todo?`
+      : `¿Borrar "${node.name}"?`;
+    if (!confirm(msg)) return;
+    await api(`/nodes/${node.id}`, {method: 'DELETE'});
+    await refresh();
+  });
+
+  return el;
+}
+
+function renderGrid() {
+  const table = document.getElementById('grid');
+  table.innerHTML = '';
+
+  const thead = document.createElement('tr');
+  thead.appendChild(document.createElement('th'));
+  for (const site of SITES) {
+    const th = document.createElement('th');
+    th.textContent = site.label;
+    thead.appendChild(th);
+  }
+  table.appendChild(thead);
+
+  for (const role of ROLES) {
+    const tr = document.createElement('tr');
+    const th = document.createElement('th');
+    th.textContent = role.label;
+    tr.appendChild(th);
+
+    for (const site of SITES) {
+      const td = document.createElement('td');
+      const nodes = TREE[site.slug][role.slug];
+      nodes.forEach(node => td.appendChild(renderNode(node, site.slug, role.slug)));
+      td.appendChild(addButtons(null, site.slug, role.slug, refresh));
+      tr.appendChild(td);
+    }
+    table.appendChild(tr);
+  }
+
+  document.getElementById('status').style.display = 'none';
+  table.style.display = 'table';
+}
+
+refresh().catch(err => {
+  document.getElementById('status').textContent = `Errorea: ${err.message}`;
+});
+</script>
+</body>
+</html>
