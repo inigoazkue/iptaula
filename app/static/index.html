@@ -75,7 +75,7 @@
 
   button, .btn {
     font-family: inherit; cursor: pointer; border: none; border-radius: 8px;
-    padding: 6px 12px; font-size: 0.78rem; font-weight: 600;
+    padding: 6px 12px; font-size: 0.78rem; font-weight: 600; margin: 0; vertical-align: middle;
     transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
   }
   button:hover, .btn:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
@@ -1227,8 +1227,10 @@ async function runResolve(btn, ip, input, onSaved) {
     if (result.found) {
       btn.classList.add('ping-green');
       btn.title = result.hostname;
-      input.value = result.hostname;
-      await onSaved(result.hostname);
+      if (input) {
+        input.value = result.hostname;
+        await onSaved(result.hostname);
+      }
     } else {
       btn.classList.add('ping-red');
       btn.title = 'Ez da ebatzi';
@@ -1255,6 +1257,9 @@ function buildHostRowEl(node, cols, ip, entry) {
   const pingCell = isAuthenticated
     ? `<td class="ping-col"><button type="button" class="ping-btn" data-ip="${ip}" title="Ping egin"></button></td>`
     : '';
+  const resolveCell = isAuthenticated
+    ? `<td class="ping-col"><button type="button" class="ping-btn main-resolve-btn" title="Hostname-a ebatzi"></button></td>`
+    : '';
   const cells = cols.map(c => {
     const val = entry ? (entry.values[String(c.id)] || '') : '';
     if (!isAuthenticated) return `<td>${escapeHtml(val)}</td>`;
@@ -1268,12 +1273,15 @@ function buildHostRowEl(node, cols, ip, entry) {
     }
     return `<td><input data-col="${c.id}" value="${escapeAttr(val)}"></td>`;
   }).join('');
-  tr.innerHTML = `${broomCell}<td>${ip}</td>${pingCell}${cells}`;
+  tr.innerHTML = `${broomCell}<td>${ip}</td>${pingCell}${resolveCell}${cells}`;
 
   if (!isAuthenticated) return tr;
 
-  const pingBtn = tr.querySelector('button.ping-btn:not(.col-ping-btn):not(.col-resolve-btn)');
+  const pingBtn = tr.querySelector('button.ping-btn[data-ip]');
   if (pingBtn) pingBtn.addEventListener('click', () => runPing(pingBtn));
+
+  const mainResolveBtn = tr.querySelector('button.main-resolve-btn');
+  if (mainResolveBtn) mainResolveBtn.addEventListener('click', () => runResolve(mainResolveBtn, ip, null, null));
 
   const broomBtn = tr.querySelector('button.broom-btn');
   if (broomBtn) {
@@ -1426,9 +1434,9 @@ function renderIpTable(node) {
 
   const table = document.createElement('table');
   table.className = 'ip-table';
-  const totalCols = 1 + (isAuthenticated ? 2 : 0) + cols.length;
+  const totalCols = 1 + (isAuthenticated ? 3 : 0) + cols.length;
   const headTr = document.createElement('tr');
-  headTr.innerHTML = `${isAuthenticated ? '<th class="broom-col"></th>' : ''}<th>IP</th>${isAuthenticated ? '<th class="ping-col">Ping</th>' : ''}${cols.map(c => `<th>${escapeHtml(c.name)}</th>`).join('')}`;
+  headTr.innerHTML = `${isAuthenticated ? '<th class="broom-col"></th>' : ''}<th>IP</th>${isAuthenticated ? '<th class="ping-col">Ping</th><th class="ping-col">Hostname</th>' : ''}${cols.map(c => `<th>${escapeHtml(c.name)}</th>`).join('')}`;
   table.appendChild(headTr);
 
   let i = 0;
