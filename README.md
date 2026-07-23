@@ -34,10 +34,13 @@ DB_PATH=./data/iptaula.db python -m uvicorn main:app --app-dir app --reload --po
 
 ## Cómo funciona
 
-- **Matriz**: las columnas son las sedes y las filas los tipos de red; ambas dimensiones se pueden añadir/quitar desde el menú de engranaje ("Matrizea kudeatu"), no están fijas en el código.
-- **Rangos y agrupaciones**: dentro de cada celda se pueden crear rangos (con su CIDR) o agrupaciones que contienen más rangos/agrupaciones, anidables sin límite.
-- **Columnas por IP**: cada rango puede activar las columnas que necesite de un catálogo global (menú de engranaje → "Zutabeak kudeatu"); al abrir un rango se ve una tabla con todas las IPs del CIDR, lista para rellenar directamente (se guarda sola al salir del campo).
-- **Búsqueda**: el buscador de arriba busca por IP, nombre, descripción o cualquier valor de columna, y despliega/resalta las coincidencias en la matriz.
+- **Matriz**: las columnas son las sedes y las filas los tipos de red; ambas dimensiones se pueden añadir/quitar desde el menú de engranaje ("Taula orokorra kudeatu"), no están fijas en el código.
+- **Rangos y agrupaciones**: dentro de cada celda se pueden crear rangos (con su CIDR) o agrupaciones que contienen más rangos/agrupaciones, anidables sin límite. Se pueden mover y reordenar arrastrando y soltando.
+- **Columnas por IP**: cada rango puede activar las columnas que necesite de un catálogo global (menú de engranaje → "IP taulen zutabeak kudeatu"); una columna se puede marcar como IP (botón de ping sobre su valor) o como Hostname (botón de resolución DNS inversa). Al abrir un rango se ve una tabla con todas las IPs del CIDR, lista para rellenar directamente (se guarda sola al salir del campo); las IPs libres consecutivas se agrupan para no ocupar espacio, y hay un botón para vaciar una fila entera de golpe.
+- **Diagnóstico por IP**: botón de ping (colores según cuántas de 6 respuestas llegan) y botón de resolución de hostname, ambos ejecutados desde el propio servidor.
+- **Deshacer/rehacer**: hasta 4 pasos atrás para altas, cambios, borrados y movimientos.
+- **Búsqueda**: el buscador de arriba busca por IP, nombre, descripción o cualquier valor de columna, resalta y despliega las coincidencias en la matriz, y muestra el detalle coincidente directamente en la tarjeta.
+- **Modo de borrado**: los botones de borrar de las tarjetas están ocultos hasta activarlos con el candado junto al selector de tema, para evitar borrados accidentales.
 - **Roles de usuario**:
   - **admin**: control total (crear/renombrar/borrar rangos y agrupaciones, gestionar columnas, sedes, tipos de red y usuarios).
   - **user**: puede navegar, buscar, y añadir/editar los valores de IP de los rangos ya existentes, pero no crear ni borrar rangos ni tocar la estructura.

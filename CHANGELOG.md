@@ -8,11 +8,20 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/). Este
 
 - Reordenar y mover agrupaciones/rangos arrastrando y soltando (en vez de solo al crearlos), incluyendo soltar directamente sobre una agrupación colapsada y un resaltado visual de la zona de destino (antes/después/dentro).
 - Deshacer/rehacer (hasta 4 pasos) para altas, cambios, borrados y movimientos de la estructura y de los valores de IP, con dos botones en la página principal y en el modal de edición de rango.
-- Botón de ping por IP en el modal de edición: verde si responde, naranja mientras lo intenta (hasta 6 intentos), rojo si no llega.
+- Botón de ping por IP en el modal de edición, con colores por tramos según cuántas de las 6 respuestas llegan: rojo (0), azul (1), naranja (2-5), verde (6).
+- Columnas del catálogo marcables como **IP** (ping directo sobre su valor) o **Hostname** (botón de resolución DNS inversa que rellena y guarda la celda); además, un botón de resolución de hostname siempre presente junto al ping principal de cada IP.
+- Las IPs libres consecutivas (3 o más seguidas) se agrupan en una fila plegada; filtro para mostrar solo las ocupadas, solo las libres o todas.
+- Botón para mostrar/ocultar columnas en la tabla de IPs, y botón para vaciar una fila entera (liberar la IP) de un clic.
+- Modo de borrado: los botones de borrar de las tarjetas están ocultos hasta activarlos con un botón candado junto al selector de tema; empieza siempre desactivado.
+- Los resultados de una búsqueda que coinciden con una IP o un valor de columna se muestran directamente en la tarjeta del rango, sin necesidad de abrir el modal; botón para vaciar el buscador.
+- Diseño adaptado a pantallas pequeñas, cierre de los modales al clicar fuera, y favicon propio.
 
 ### Cambiado
 
 - La vista previa de cada rango en la matriz general ya no muestra una mini-tabla de IPs; solo nombre, descripción y CIDR, para que las tarjetas ocupen menos espacio.
+- En el modal de edición de rango, los datos del tramo y las columnas activas se muestran en dos columnas lado a lado (con título y separador) en vez de apiladas, para que la tabla de IPs empiece más arriba.
+- Las IPs ocupadas se resaltan en azul cielo en vez de naranja.
+- Textos del menú de ajustes: "Matrizea kudeatu" → "Taula orokorra kudeatu", "Zutabeak kudeatu" → "IP taulen zutabeak kudeatu".
 
 ## [1.0.0] - 2026-07-24
 

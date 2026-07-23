@@ -315,7 +315,7 @@
 <div class="topbar">
   <div class="title-row">
     <h1>IP Taula</h1>
-    <div id="version-badge">v1.0.0</div>
+    <div id="version-badge">v1.1.0</div>
   </div>
   <div class="topbar-right">
     <button class="btn-neutral" id="undo-btn" style="display:none;" title="Desegin" disabled></button>
@@ -538,8 +538,8 @@ function renderSettingsMenu() {
   const menu = document.getElementById('settings-menu');
   const items = [];
   if (isAdmin()) {
-    items.push({label: 'Matrizea kudeatu', action: () => openMatrixModal()});
-    items.push({label: 'Zutabeak kudeatu', action: () => openColumnsModal()});
+    items.push({label: 'Taula orokorra kudeatu', action: () => openMatrixModal()});
+    items.push({label: 'IP taulen zutabeak kudeatu', action: () => openColumnsModal()});
     items.push({label: 'Erabiltzaileak kudeatu', action: () => openUsersModal()});
   }
   items.push({label: 'Pasahitza aldatu', action: () => openPasswordModal()});
@@ -1105,7 +1105,7 @@ async function renderRangeModal(nodeId) {
               ${availableCols.length ? availableCols.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('') : '<option>Zutabe gehiagorik ez</option>'}
             </select>
             <button type="submit" class="btn-green" ${availableCols.length ? '' : 'disabled'}>+ gehitu</button>
-            <button type="button" class="btn-text" id="open-columns-catalog">Zutabeak kudeatu...</button>
+            <button type="button" class="btn-text" id="open-columns-catalog">IP taulen zutabeak kudeatu...</button>
           </form>
         ` : ''}
         </div>
@@ -1476,7 +1476,7 @@ async function renderColumnsModal() {
   const body = document.getElementById('columns-modal-body');
   body.innerHTML = `
     <div class="modal-header">
-      <h2>Zutabeak kudeatu</h2>
+      <h2>IP taulen zutabeak kudeatu</h2>
       <button class="btn-neutral" id="close-columns-modal">Itxi</button>
     </div>
     <div id="catalog-list">
@@ -1539,7 +1539,7 @@ async function renderMatrixModal() {
   const body = document.getElementById('matrix-modal-body');
   body.innerHTML = `
     <div class="modal-header">
-      <h2>Matrizea kudeatu</h2>
+      <h2>Taula orokorra kudeatu</h2>
       <button class="btn-neutral" id="close-matrix-modal">Itxi</button>
     </div>
     <div class="modal-section">
