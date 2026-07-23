@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS nodes (
     name TEXT NOT NULL,
     description TEXT,
     cidr TEXT,
+    position INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -190,6 +191,13 @@ def migrate_schema(conn):
     if cols and "user_id" not in cols:
         conn.execute("DROP TABLE sessions")
 
+    # `position` es nueva: ordena los hermanos (misma parent_id/site/role)
+    # para poder reordenarlos a mano. Las filas existentes quedan todas a 0,
+    # lo que con "ORDER BY position, id" mantiene su orden actual (por id).
+    node_cols = [r["name"] for r in conn.execute("PRAGMA table_info(nodes)")]
+    if node_cols and "position" not in node_cols:
+        conn.execute("ALTER TABLE nodes ADD COLUMN position INTEGER NOT NULL DEFAULT 0")
+
 
 def init_db():
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
@@ -255,6 +263,16 @@ class NodeUpdate(BaseModel):
     cidr: Optional[str] = None
 
 
+class MoveIn(BaseModel):
+    parent_id: Optional[int] = None
+    site: Optional[str] = None
+    role: Optional[str] = None
+
+
+class ReorderIn(BaseModel):
+    direction: str
+
+
 class ColumnIn(BaseModel):
     name: str
 
@@ -316,6 +334,26 @@ def valid_role(conn, slug):
     return conn.execute("SELECT 1 FROM roles WHERE slug=?", (slug,)).fetchone() is not None
 
 
+def next_position(conn, parent_id, site, role):
+    row = conn.execute(
+        "SELECT COALESCE(MAX(position), -1) + 1 AS next FROM nodes WHERE parent_id IS ? AND site=? AND role=?",
+        (parent_id, site, role),
+    ).fetchone()
+    return row["next"]
+
+
+def get_descendant_ids(conn, node_id):
+    rows = conn.execute(
+        "WITH RECURSIVE d(id) AS ("
+        "  SELECT id FROM nodes WHERE parent_id = ?"
+        "  UNION ALL"
+        "  SELECT n.id FROM nodes n JOIN d ON n.parent_id = d.id"
+        ") SELECT id FROM d",
+        (node_id,),
+    ).fetchall()
+    return [r["id"] for r in rows]
+
+
 # --- árbol completo (sedes, roles y nodos con sus IPs/columnas) ---
 
 @app.get("/api/tree")
@@ -323,7 +361,7 @@ def get_tree():
     with get_db() as conn:
         sites = [dict(r) for r in conn.execute("SELECT * FROM sites ORDER BY id")]
         roles = [dict(r) for r in conn.execute("SELECT * FROM roles ORDER BY id")]
-        rows = [dict(r) for r in conn.execute("SELECT * FROM nodes ORDER BY id")]
+        rows = [dict(r) for r in conn.execute("SELECT * FROM nodes ORDER BY position, id")]
 
         columns_by_node = {}
         for rc in conn.execute(
@@ -393,10 +431,11 @@ def create_node(node: NodeIn, _auth=Depends(require_admin)):
             validate_cidr(node.cidr)
             cidr = node.cidr
 
+        position = next_position(conn, node.parent_id, site, role)
         cur = conn.execute(
-            "INSERT INTO nodes (parent_id, site, role, node_type, name, description, cidr) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (node.parent_id, site, role, node.node_type, node.name.strip(), node.description, cidr),
+            "INSERT INTO nodes (parent_id, site, role, node_type, name, description, cidr, position) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (node.parent_id, site, role, node.node_type, node.name.strip(), node.description, cidr, position),
         )
         return {"id": cur.lastrowid}
 
@@ -431,6 +470,75 @@ def delete_node(node_id: int, _auth=Depends(require_admin)):
         if not row:
             raise HTTPException(404, "Ez da aurkitu")
         conn.execute("DELETE FROM nodes WHERE id=?", (node_id,))
+    return {"ok": True}
+
+
+@app.post("/api/nodes/{node_id}/move")
+def move_node(node_id: int, body: MoveIn, _auth=Depends(require_admin)):
+    """Mueve un nodo a otro padre (dentro de una agrupación) o a otra
+    combinación sede/rol como nodo de primer nivel. Si el nodo es una
+    agrupación, propaga la nueva sede/rol a todos sus descendientes."""
+    with get_db() as conn:
+        node = conn.execute("SELECT * FROM nodes WHERE id=?", (node_id,)).fetchone()
+        if not node:
+            raise HTTPException(404, "Ez da aurkitu")
+
+        if body.parent_id is not None:
+            if body.parent_id == node_id:
+                raise HTTPException(400, "Nodo bat ezin da bere baitan sartu")
+            parent = conn.execute("SELECT * FROM nodes WHERE id=?", (body.parent_id,)).fetchone()
+            if not parent:
+                raise HTTPException(404, "Helburuko taldea ez da aurkitu")
+            if parent["node_type"] != "agrupacion":
+                raise HTTPException(400, "Helburua talde bat izan behar da")
+            if body.parent_id in get_descendant_ids(conn, node_id):
+                raise HTTPException(400, "Ezin da talde bat bere ondorengo baten barruan sartu")
+            new_parent_id, new_site, new_role = body.parent_id, parent["site"], parent["role"]
+        else:
+            if not body.site or not valid_site(conn, body.site) or not body.role or not valid_role(conn, body.role):
+                raise HTTPException(400, "site/role baliogabeak lehen mailako nodo baterako")
+            new_parent_id, new_site, new_role = None, body.site, body.role
+
+        position = next_position(conn, new_parent_id, new_site, new_role)
+        conn.execute(
+            "UPDATE nodes SET parent_id=?, site=?, role=?, position=? WHERE id=?",
+            (new_parent_id, new_site, new_role, position, node_id),
+        )
+        descendant_ids = get_descendant_ids(conn, node_id)
+        if descendant_ids:
+            placeholders = ",".join("?" * len(descendant_ids))
+            conn.execute(
+                f"UPDATE nodes SET site=?, role=? WHERE id IN ({placeholders})",
+                (new_site, new_role, *descendant_ids),
+            )
+    return {"ok": True}
+
+
+@app.post("/api/nodes/{node_id}/reorder")
+def reorder_node(node_id: int, body: ReorderIn, _auth=Depends(require_admin)):
+    """Sube o baja un nodo una posición entre sus hermanos (misma
+    parent_id/site/role). Renumera todo el grupo de hermanos de 0 en
+    adelante, así que también sirve para "sanear" posiciones repetidas."""
+    with get_db() as conn:
+        node = conn.execute("SELECT * FROM nodes WHERE id=?", (node_id,)).fetchone()
+        if not node:
+            raise HTTPException(404, "Ez da aurkitu")
+        siblings = conn.execute(
+            "SELECT id FROM nodes WHERE parent_id IS ? AND site=? AND role=? ORDER BY position, id",
+            (node["parent_id"], node["site"], node["role"]),
+        ).fetchall()
+        if body.direction not in ("up", "down"):
+            raise HTTPException(400, "direction balioak 'up' edo 'down' izan behar du")
+        ids = [r["id"] for r in siblings]
+        idx = ids.index(node_id)
+        if body.direction == "up" and idx > 0:
+            ids[idx - 1], ids[idx] = ids[idx], ids[idx - 1]
+        elif body.direction == "down" and idx < len(ids) - 1:
+            ids[idx + 1], ids[idx] = ids[idx], ids[idx + 1]
+        # si ya está en el extremo correspondiente, no hay nada que hacer
+        # (no es un error, simplemente no se mueve)
+        for pos, sibling_id in enumerate(ids):
+            conn.execute("UPDATE nodes SET position=? WHERE id=?", (pos, sibling_id))
     return {"ok": True}
 
 

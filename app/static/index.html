@@ -597,6 +597,72 @@ function buildEditForm(node, onDone) {
   return form;
 }
 
+function collectDescendantIds(node) {
+  const acc = new Set();
+  function walk(n) { n.children.forEach(c => { acc.add(c.id); walk(c); }); }
+  walk(node);
+  return acc;
+}
+
+// todas las agrupaciones del árbol salvo el propio nodo y sus descendientes
+// (no tendría sentido, y el backend lo rechazaría igualmente)
+function movableGroups(excludeId, excludeDescendantIds) {
+  const acc = [];
+  function walk(node, path) {
+    if (node.node_type === 'agrupacion' && node.id !== excludeId && !excludeDescendantIds.has(node.id)) {
+      acc.push({id: node.id, label: `${path} / ${node.name}`});
+    }
+    const childPath = node.node_type === 'agrupacion' ? `${path} / ${node.name}` : path;
+    node.children.forEach(c => walk(c, childPath));
+  }
+  for (const site of SITES) for (const role of ROLES) {
+    (TREE[site.slug][role.slug] || []).forEach(n => walk(n, `${site.label} · ${role.label}`));
+  }
+  return acc;
+}
+
+function buildMoveForm(node, onDone) {
+  const excludeIds = collectDescendantIds(node);
+  const groups = movableGroups(node.id, excludeIds);
+
+  const form = document.createElement('form');
+  form.className = 'inline-form';
+  form.innerHTML = `
+    <select name="destination" style="flex:1 1 100%;">
+      <optgroup label="Lehen mailan (sede / sare mota)">
+        ${SITES.flatMap(s => ROLES.map(r =>
+          `<option value="top:${s.slug}:${r.slug}" ${s.slug === node.site && r.slug === node.role && !node.parent_id ? 'selected' : ''}>${escapeHtml(s.label)} · ${escapeHtml(r.label)}</option>`
+        )).join('')}
+      </optgroup>
+      ${groups.length ? `
+        <optgroup label="Talde baten barruan">
+          ${groups.map(g => `<option value="group:${g.id}">${escapeHtml(g.label)}</option>`).join('')}
+        </optgroup>
+      ` : ''}
+    </select>
+    <button type="submit" class="btn-blue">Mugitu</button>
+    <button type="button" class="btn-neutral cancel">Utzi</button>
+  `;
+  form.querySelector('.cancel').addEventListener('click', () => onDone(false));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    form.querySelectorAll('.form-error').forEach(el => el.remove());
+    const value = form.destination.value;
+    const payload = value.startsWith('top:')
+      ? (([, site, role]) => ({parent_id: null, site, role}))(value.split(':'))
+      : {parent_id: Number(value.split(':')[1])};
+    try {
+      await api(`/nodes/${node.id}/move`, {method: 'POST', body: JSON.stringify(payload)});
+      await onDone(true);
+    } catch (err) {
+      const p = document.createElement('div');
+      p.className = 'form-error'; p.textContent = err.message;
+      form.appendChild(p);
+    }
+  });
+  return form;
+}
+
 function countDescendants(node) {
   return node.children.reduce((acc, c) => acc + 1 + countDescendants(c), 0);
 }
@@ -643,6 +709,9 @@ function renderNode(node, site, role) {
     <div class="node-head">
       <span class="node-name">${escapeHtml(node.name)}</span>
       <span class="node-ctrl">
+        ${isAdmin() ? '<button class="btn-text" data-action="up" title="Gora">▲</button>' : ''}
+        ${isAdmin() ? '<button class="btn-text" data-action="down" title="Behera">▼</button>' : ''}
+        ${isAdmin() ? '<button class="btn-text" data-action="move">mugitu</button>' : ''}
         ${isAdmin() && node.node_type === 'agrupacion' ? '<button class="btn-text" data-action="edit">editatu</button>' : ''}
         ${isAdmin() ? '<button class="btn-text" data-action="delete">ezabatu</button>' : ''}
       </span>
@@ -679,6 +748,21 @@ function renderNode(node, site, role) {
     body.querySelector('[data-action="delete"]').addEventListener('click', (e) => {
       e.stopPropagation();
       deleteNode(node);
+    });
+    body.querySelector('[data-action="up"]').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await api(`/nodes/${node.id}/reorder`, {method: 'POST', body: JSON.stringify({direction: 'up'})});
+      await refresh();
+    });
+    body.querySelector('[data-action="down"]').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await api(`/nodes/${node.id}/reorder`, {method: 'POST', body: JSON.stringify({direction: 'down'})});
+      await refresh();
+    });
+    body.querySelector('[data-action="move"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const form = buildMoveForm(node, async (changed) => { changed ? await refresh() : form.replaceWith(body); });
+      body.replaceWith(form);
     });
   }
 
