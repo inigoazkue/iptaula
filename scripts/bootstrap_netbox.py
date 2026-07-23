@@ -52,6 +52,14 @@ ROLES = [
     {"name": "Radios", "slug": "radios", "description": "Redes de radio (fila RADIOS)"},
 ]
 
+# Los tags deben existir antes de poder referenciarlos por nombre al crear
+# un objeto (la API no los autocrea). "dashboard" lo usa el panel visual
+# (dashboard/index.html) al dar de alta una IP desde el alta rápida.
+TAGS = [
+    {"name": "migracion-legacy", "slug": "migracion-legacy", "description": "Migrado automáticamente desde las tablas HTML/Word originales"},
+    {"name": "dashboard", "slug": "dashboard", "description": "Creado desde el panel visual (dashboard/index.html)"},
+]
+
 
 def get_existing(endpoint, key="name"):
     resp = SESSION.get(f"{NETBOX_URL}/api/{endpoint}/", params={"limit": 0})
@@ -80,5 +88,8 @@ create_missing("ipam/vrfs", VRFS)
 
 print("Roles de prefijo:")
 create_missing("ipam/roles", ROLES)
+
+print("Tags:")
+create_missing("extras/tags", TAGS)
 
 print("\nListo. Siguiente paso: migrar los prefijos/IPs reales de las tablas HTML/Word a estos Sites/VRFs/Roles.")

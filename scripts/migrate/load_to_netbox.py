@@ -50,6 +50,13 @@ def api_post(endpoint, payload):
     return resp.json()
 
 
+def api_patch(endpoint, obj_id, payload):
+    resp = SESSION.patch(f"{NETBOX_URL}/api/{endpoint}/{obj_id}/", json=payload)
+    if resp.status_code >= 300:
+        raise RuntimeError(f"PATCH {endpoint}/{obj_id} -> {resp.status_code}: {resp.text}")
+    return resp.json()
+
+
 def site_id(slug):
     if slug is None:
         return None
@@ -95,8 +102,16 @@ def ensure_prefix(subnet, vrf_name, site_slug, role_slug, description):
         params["vrf_id"] = "null"
     existing = api_get("ipam/prefixes", params)
     if existing:
-        _prefix_cache[cache_key] = existing[0]["id"]
-        return existing[0]["id"]
+        prefix_obj = existing[0]
+        new_desc = (description or "")[:200]
+        # Re-ejecutar con un manifiesto mejorado (p.ej. nombres reales en vez
+        # del nombre de fichero) debe poder corregir subredes ya creadas,
+        # no solo las nuevas - por eso se actualiza aquí en vez de omitirse.
+        if new_desc and prefix_obj.get("description") != new_desc:
+            api_patch("ipam/prefixes", prefix_obj["id"], {"description": new_desc})
+            print(f"  prefix renombrado: {subnet} -> \"{new_desc}\"")
+        _prefix_cache[cache_key] = prefix_obj["id"]
+        return prefix_obj["id"]
 
     payload = {"prefix": subnet, "status": "active", "description": description[:200]}
     if vid:
@@ -177,7 +192,8 @@ def run():
                     continue
                 subnet = subnet_24(ip)
                 before = len(_prefix_cache)
-                ensure_prefix(subnet, rec["vrf"], rec["site"], rec["role"], rec["source_page"])
+                description = rec.get("subnet_label") or rec["source_page"]
+                ensure_prefix(subnet, rec["vrf"], rec["site"], rec["role"], description)
                 if len(_prefix_cache) > before:
                     stats["prefixes"] += 1
                 result = create_ip(ip, rec["vrf"], rec["label"], rec["source_page"])

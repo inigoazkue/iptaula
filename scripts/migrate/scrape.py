@@ -33,6 +33,7 @@ OUTPUT_DIR = Path(__file__).parent / "data"
 OUTPUT_FILE = OUTPUT_DIR / "parsed_ips.json"
 
 IP_RE = re.compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
+SUBNET_PLACEHOLDER_RE = re.compile(r"^\d[\d\s]*\.\s?\d[\d\s]*\.\s?\d[\d\s]*\.[xX]$")
 ROW_RE = re.compile(r"<tr[^>]*>(.*?)</tr>", re.IGNORECASE | re.DOTALL)
 CELL_RE = re.compile(r"<td[^>]*>(.*?)</td>", re.IGNORECASE | re.DOTALL)
 HREF_RE = re.compile(r'href\s*=\s*"([^"]+)"', re.IGNORECASE)
@@ -69,8 +70,28 @@ def find_sub_links(row_html, current_url):
     return links
 
 
+def guess_zone_label(labels, links):
+    """En una fila de página índice (SUBRED/ZONA/LINK), identifica cuál de
+    los textos no-IP es la descripción real (p.ej. "EQUIPOS VARIOS"),
+    descartando el propio marcador de subred ("10.3.12.x") y el texto del
+    enlace (que repite el nombre de fichero, p.ej. "IPS_10_3_12.HTM")."""
+    link_basenames = {
+        re.sub(r"\.html?$", "", link.rsplit("/", 1)[-1], flags=re.IGNORECASE).lower().replace(" ", "")
+        for link in links
+    }
+    for label in labels:
+        if SUBNET_PLACEHOLDER_RE.match(label.replace(" ", "")):
+            continue
+        normalized = re.sub(r"\.html?$", "", label, flags=re.IGNORECASE).lower().replace(" ", "")
+        if normalized in link_basenames:
+            continue
+        return label
+    return None
+
+
 def parse_page(path, current_url, body_html):
-    """Devuelve (records, sub_links) para una página ya descargada."""
+    """Devuelve (records, sub_links) para una página ya descargada.
+    sub_links es una lista de (link, zone_label_o_None)."""
     records = []
     sub_links = []
     for row_match in ROW_RE.finditer(body_html):
@@ -89,7 +110,10 @@ def parse_page(path, current_url, body_html):
                 "ip_2": ips[1] if len(ips) > 1 else None,
                 "label": " / ".join(labels),
             })
-        sub_links.extend(find_sub_links(row_html, current_url))
+        row_links = find_sub_links(row_html, current_url)
+        if row_links:
+            zone_label = guess_zone_label(labels, row_links)
+            sub_links.extend((link, zone_label) for link in row_links)
     return records, sub_links
 
 
@@ -128,6 +152,7 @@ def run():
                     "site": entry.get("site"),
                     "role": entry.get("role"),
                     "vrf": entry.get("vrf"),
+                    "subnet_label": entry.get("label"),
                     "needs_review": bool(entry.get("review")),
                     "review_note": entry.get("review"),
                 })
@@ -138,9 +163,12 @@ def run():
         else:
             processed_pages.append({"path": path, "records": 0})
 
-        for link in sub_links:
+        for link, zone_label in sub_links:
             if link.lower() not in visited:
-                queue.append((link, entry, depth + 1))
+                child_entry = dict(entry)
+                if zone_label:
+                    child_entry["label"] = zone_label
+                queue.append((link, child_entry, depth + 1))
 
     OUTPUT_DIR.mkdir(exist_ok=True)
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:

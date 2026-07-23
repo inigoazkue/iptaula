@@ -83,15 +83,42 @@
   .prefix-chip {
     display: block; padding: 6px 8px; margin-bottom: 6px;
     border: 1px solid var(--border); border-radius: 6px;
-    text-decoration: none; color: var(--text-primary);
+    color: var(--text-primary);
     background: var(--surface-1);
   }
   .prefix-chip:hover { border-color: var(--link); }
+  .prefix-head { display: flex; justify-content: space-between; align-items: baseline; cursor: pointer; }
   .prefix-cidr { font-weight: 600; font-size: 0.85rem; }
   .prefix-desc { color: var(--text-muted); font-size: 0.75rem; display: block; margin: 2px 0 4px; }
+  .netbox-mini-link { font-size: 0.68rem; color: var(--link); text-decoration: none; white-space: nowrap; }
+  .netbox-mini-link:hover { text-decoration: underline; }
   .bar-track { height: 6px; border-radius: 3px; background: var(--gridline); overflow: hidden; }
   .bar-fill { height: 100%; border-radius: 3px; }
   .prefix-stats { font-size: 0.72rem; color: var(--text-secondary); margin-top: 3px; display: flex; justify-content: space-between; }
+
+  .prefix-detail { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--gridline); }
+  .ip-row { display: flex; justify-content: space-between; gap: 6px; font-size: 0.75rem; padding: 3px 0; border-bottom: 1px solid var(--gridline); }
+  .ip-row:last-child { border-bottom: none; }
+  .ip-addr { font-weight: 600; white-space: nowrap; }
+  .ip-name { color: var(--text-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0 6px; }
+  .available-wrap { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+  .available-chip {
+    font-size: 0.7rem; padding: 2px 6px; border-radius: 10px;
+    background: var(--good); color: #fff; border: none; cursor: pointer; opacity: 0.85;
+  }
+  .available-chip:hover { opacity: 1; }
+  .quickadd-form { display: flex; gap: 4px; margin-top: 6px; }
+  .quickadd-form input {
+    font-size: 0.75rem; padding: 4px 6px; border: 1px solid var(--border);
+    border-radius: 4px; background: var(--surface-1); color: var(--text-primary);
+  }
+  .quickadd-form input[name="ip"] { width: 110px; }
+  .quickadd-form input[name="label"] { flex: 1; min-width: 60px; }
+  .quickadd-form button {
+    font-size: 0.75rem; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--link);
+    background: var(--link); color: #fff; cursor: pointer;
+  }
+  .detail-msg { font-size: 0.72rem; color: var(--text-muted); }
 
   .empty-cell { color: var(--text-muted); font-size: 0.78rem; }
   #status { color: var(--text-muted); font-size: 0.85rem; margin: 8px 0; }
@@ -129,6 +156,9 @@
 
 <script>
 const NETBOX_BASE = `${location.protocol}//${location.hostname}:8080`;
+// Token del superusuario, solo para las altas rápidas desde este panel
+// (las lecturas ya son anónimas gracias a EXEMPT_VIEW_PERMISSIONS).
+const NETBOX_TOKEN = 'b3cc561fca29e9165ea74a68879f96711fc1b5be';
 document.getElementById('netbox-link').href = NETBOX_BASE;
 
 const ROLE_ORDER = ['gestion', 'contenidos', 'privada', 'radios'];
@@ -177,20 +207,134 @@ function addPrefixLink(site, role) {
   return `${NETBOX_BASE}/ipam/prefixes/add/?${params}`;
 }
 
+const DNS_NAME_RE = /^[A-Za-z0-9*_.-]+$/;
+const authHeaders = () => ({'Content-Type': 'application/json', 'Authorization': `Token ${NETBOX_TOKEN}`});
+
+async function fetchUsedIps(prefix) {
+  // limit=0 en la API de NetBox desactiva la paginación (devuelve todo)
+  const params = new URLSearchParams({parent: prefix.prefix, limit: '0'});
+  params.set('vrf_id', prefix.vrf ? prefix.vrf.id : 'null');
+  const resp = await fetch(`${NETBOX_BASE}/api/ipam/ip-addresses/?${params}`);
+  if (!resp.ok) return [];
+  const data = await resp.json();
+  return data.results;
+}
+
+async function fetchAvailableIps(prefix, count) {
+  const resp = await fetch(`${NETBOX_BASE}/api/ipam/prefixes/${prefix.id}/available-ips/?limit=${count}`);
+  if (!resp.ok) return [];
+  return resp.json();
+}
+
+function updateChipStats(chipEl, used, total) {
+  const pct = total ? Math.round((used / total) * 100) : 0;
+  chipEl.querySelector('.bar-fill').style.width = `${Math.min(pct, 100)}%`;
+  chipEl.querySelector('.bar-fill').style.background = statusColor(pct);
+  chipEl.querySelector('.prefix-stats').innerHTML = `<span>${used} / ${total} usadas</span><span>${pct}%</span>`;
+}
+
+async function renderPrefixDetail(prefix, detailEl, chipEl) {
+  detailEl.innerHTML = '<span class="detail-msg">Cargando...</span>';
+  const [used, available] = await Promise.all([
+    fetchUsedIps(prefix),
+    fetchAvailableIps(prefix, 8),
+  ]);
+
+  const usedRows = used.length
+    ? used.map(ip => `
+        <div class="ip-row">
+          <span class="ip-addr">${ip.address.split('/')[0]}</span>
+          <span class="ip-name">${ip.dns_name || ip.description || ''}</span>
+          <a class="netbox-mini-link" href="${NETBOX_BASE}/ipam/ip-addresses/${ip.id}/" target="_blank">editar ↗</a>
+        </div>`).join('')
+    : '<span class="detail-msg">Sin IPs asignadas todavía.</span>';
+
+  const availableChips = available.length
+    ? `<div class="available-wrap">${available.map(a => `<button type="button" class="available-chip" data-ip="${a.address.split('/')[0]}">${a.address.split('/')[0]}</button>`).join('')}</div>`
+    : '<span class="detail-msg">Sin IPs libres calculadas (subred llena o muy grande).</span>';
+
+  detailEl.innerHTML = `
+    <div class="detail-msg">Usadas:</div>
+    ${usedRows}
+    <div class="detail-msg" style="margin-top:6px;">Próximas libres (clic para rellenar el alta):</div>
+    ${availableChips}
+    <form class="quickadd-form">
+      <input type="text" name="ip" placeholder="IP" required>
+      <input type="text" name="label" placeholder="Hostname / descripción">
+      <button type="submit">+ Añadir</button>
+    </form>
+    <div class="detail-msg quickadd-status"></div>
+  `;
+
+  detailEl.querySelectorAll('.available-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      detailEl.querySelector('input[name="ip"]').value = btn.dataset.ip;
+      detailEl.querySelector('input[name="label"]').focus();
+    });
+  });
+
+  detailEl.querySelector('.quickadd-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const ip = form.ip.value.trim();
+    const label = form.label.value.trim();
+    const statusMsg = detailEl.querySelector('.quickadd-status');
+    const maskLen = prefix.prefix.split('/')[1];
+    const payload = {
+      address: `${ip}/${maskLen}`,
+      status: 'active',
+      description: label,
+      tags: [{name: 'dashboard'}],
+    };
+    if (prefix.vrf) payload.vrf = prefix.vrf.id;
+    if (label && DNS_NAME_RE.test(label)) payload.dns_name = label;
+
+    statusMsg.textContent = 'Guardando...';
+    try {
+      const resp = await fetch(`${NETBOX_BASE}/api/ipam/ip-addresses/`, {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify(payload),
+      });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        throw new Error(JSON.stringify(body));
+      }
+      statusMsg.textContent = '';
+      await renderPrefixDetail(prefix, detailEl, chipEl);
+      const newUsed = (await fetchUsedIps(prefix)).length;
+      updateChipStats(chipEl, newUsed, hostsInPrefix(prefix.prefix));
+    } catch (err) {
+      statusMsg.textContent = `Error: ${err.message}`;
+    }
+  });
+}
+
 function prefixChip(prefix, util) {
   const pct = util.total ? Math.round((util.used / util.total) * 100) : 0;
   const color = statusColor(pct);
-  const a = document.createElement('a');
-  a.className = 'prefix-chip';
-  a.href = `${NETBOX_BASE}/ipam/prefixes/${prefix.id}/`;
-  a.target = '_blank';
-  a.innerHTML = `
-    <span class="prefix-cidr">${prefix.prefix}</span>
+  const div = document.createElement('div');
+  div.className = 'prefix-chip';
+  div.innerHTML = `
+    <div class="prefix-head">
+      <span class="prefix-cidr">${prefix.prefix}</span>
+      <a class="netbox-mini-link" href="${NETBOX_BASE}/ipam/prefixes/${prefix.id}/" target="_blank" onclick="event.stopPropagation()">NetBox ↗</a>
+    </div>
     ${prefix.description ? `<span class="prefix-desc">${prefix.description}</span>` : ''}
     <div class="bar-track"><div class="bar-fill" style="width:${Math.min(pct,100)}%; background:${color}"></div></div>
     <div class="prefix-stats"><span>${util.used} / ${util.total} usadas</span><span>${pct}%</span></div>
+    <div class="prefix-detail" style="display:none"></div>
   `;
-  return a;
+  const head = div.querySelector('.prefix-head');
+  const detail = div.querySelector('.prefix-detail');
+  let loaded = false;
+  head.addEventListener('click', async () => {
+    const opening = detail.style.display === 'none';
+    detail.style.display = opening ? 'block' : 'none';
+    if (opening && !loaded) {
+      loaded = true;
+      await renderPrefixDetail(prefix, detail, div);
+    }
+  });
+  return div;
 }
 
 function siteKeyOf(prefix) {
