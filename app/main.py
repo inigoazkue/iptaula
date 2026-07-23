@@ -17,10 +17,12 @@ requieren haber iniciado sesión (cookie de sesión simple, sin JWT ni
 librerías externas - hash de contraseña con pbkdf2 de la librería estándar).
 """
 import hashlib
+import json
 import os
 import re
 import secrets
 import sqlite3
+import subprocess
 import unicodedata
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timedelta
@@ -39,6 +41,7 @@ DEFAULT_ADMIN_USER = "admin"
 DEFAULT_ADMIN_PASSWORD = "Digibat@1"
 SESSION_COOKIE = "session"
 SESSION_MAX_AGE_DAYS = 30
+UNDO_DEPTH = 4
 
 DEFAULT_SITES = [
     ("bilbo", "Bilbo"), ("miramon", "Miramon"), ("gasteiz", "Gasteiz"),
@@ -123,6 +126,22 @@ CREATE TABLE IF NOT EXISTS sessions (
     token TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Desegin/berregin: argazki osoak (nodes + range_columns + ip_entries +
+-- ip_values) ekintza aldatzaile bakoitzaren AURRETIK. `push_undo()` UNDO_DEPTH
+-- baino gehiago badago zaharrena kentzen du, eta ekintza berri batek redo_stack
+-- osoa hustutzen du (etorkizuneko adar bat baliogabetzen baita).
+CREATE TABLE IF NOT EXISTS undo_stack (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    snapshot TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS redo_stack (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    snapshot TEXT NOT NULL
 );
 """
 
@@ -351,6 +370,119 @@ def get_descendant_ids(conn, node_id):
     return [r["id"] for r in rows]
 
 
+# --- desegin / berregin ---
+# Egitura eta IP balioen edozein ekintza aldatzailek argazki bat sortzen du
+# aldaketa egin AURRETIK (push_undo). Desegiteak/berregiteak argazki hori
+# osorik berrezartzen du (nodes/range_columns/ip_entries/ip_values taulak
+# hustu eta id berberekin berriz sartu), ez du zutabe/sede/rol katalogorik
+# ukitzen.
+
+def take_snapshot(conn):
+    return json.dumps({
+        "nodes": [dict(r) for r in conn.execute("SELECT * FROM nodes")],
+        "range_columns": [dict(r) for r in conn.execute("SELECT * FROM range_columns")],
+        "ip_entries": [dict(r) for r in conn.execute("SELECT * FROM ip_entries")],
+        "ip_values": [dict(r) for r in conn.execute("SELECT * FROM ip_values")],
+    })
+
+
+def push_undo(conn):
+    conn.execute("INSERT INTO undo_stack (snapshot) VALUES (?)", (take_snapshot(conn),))
+    old_ids = [r["id"] for r in conn.execute("SELECT id FROM undo_stack ORDER BY id")]
+    if len(old_ids) > UNDO_DEPTH:
+        stale = old_ids[: len(old_ids) - UNDO_DEPTH]
+        conn.executemany("DELETE FROM undo_stack WHERE id=?", [(i,) for i in stale])
+    conn.execute("DELETE FROM redo_stack")
+
+
+def restore_snapshot(conn, snapshot_json):
+    data = json.loads(snapshot_json)
+    conn.execute("PRAGMA foreign_keys = OFF")
+    conn.execute("DELETE FROM ip_values")
+    conn.execute("DELETE FROM ip_entries")
+    conn.execute("DELETE FROM range_columns")
+    conn.execute("DELETE FROM nodes")
+    for row in data["nodes"]:
+        conn.execute(
+            "INSERT INTO nodes (id, parent_id, site, role, node_type, name, description, cidr, position, created_at) "
+            "VALUES (:id, :parent_id, :site, :role, :node_type, :name, :description, :cidr, :position, :created_at)",
+            row,
+        )
+    for row in data["range_columns"]:
+        conn.execute("INSERT INTO range_columns (node_id, column_id) VALUES (:node_id, :column_id)", row)
+    for row in data["ip_entries"]:
+        conn.execute(
+            "INSERT INTO ip_entries (id, node_id, ip, created_at) VALUES (:id, :node_id, :ip, :created_at)", row
+        )
+    for row in data["ip_values"]:
+        conn.execute(
+            "INSERT INTO ip_values (ip_entry_id, column_id, value) VALUES (:ip_entry_id, :column_id, :value)", row
+        )
+    conn.execute("PRAGMA foreign_keys = ON")
+
+
+@app.post("/api/undo")
+def undo(_auth=Depends(require_auth)):
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM undo_stack ORDER BY id DESC LIMIT 1").fetchone()
+        if not row:
+            raise HTTPException(400, "Ez dago desegiteko ekintzarik")
+        conn.execute("INSERT INTO redo_stack (snapshot) VALUES (?)", (take_snapshot(conn),))
+        restore_snapshot(conn, row["snapshot"])
+        conn.execute("DELETE FROM undo_stack WHERE id=?", (row["id"],))
+    return {"ok": True}
+
+
+@app.post("/api/redo")
+def redo(_auth=Depends(require_auth)):
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM redo_stack ORDER BY id DESC LIMIT 1").fetchone()
+        if not row:
+            raise HTTPException(400, "Ez dago berregiteko ekintzarik")
+        conn.execute("INSERT INTO undo_stack (snapshot) VALUES (?)", (take_snapshot(conn),))
+        restore_snapshot(conn, row["snapshot"])
+        conn.execute("DELETE FROM redo_stack WHERE id=?", (row["id"],))
+    return {"ok": True}
+
+
+@app.get("/api/history-status")
+def history_status():
+    with get_db() as conn:
+        can_undo = conn.execute("SELECT 1 FROM undo_stack LIMIT 1").fetchone() is not None
+        can_redo = conn.execute("SELECT 1 FROM redo_stack LIMIT 1").fetchone() is not None
+    return {"can_undo": can_undo, "can_redo": can_redo}
+
+
+# --- ping (diagnostiko hutsa, ez du daturik aldatzen) ---
+
+PING_UNREACHABLE_MARKERS = (
+    "Destination Host Unreachable",
+    "Destination Net Unreachable",
+    "Destination Port Unreachable",
+    "Destination Unreachable",
+)
+
+
+@app.get("/api/ping/{ip}")
+def ping_ip(ip: str, _auth=Depends(require_auth)):
+    try:
+        ip_address(ip)
+    except ValueError:
+        raise HTTPException(400, "IP baliogabea")
+    try:
+        result = subprocess.run(
+            ["ping", "-c", "6", "-W", "1", ip],
+            capture_output=True, text=True, timeout=15,
+        )
+        output = result.stdout + result.stderr
+        reachable = result.returncode == 0
+    except subprocess.TimeoutExpired:
+        output = ""
+        reachable = False
+    rejected = any(marker in output for marker in PING_UNREACHABLE_MARKERS)
+    return {"reachable": reachable, "rejected": rejected, "detail": output[-1000:]}
+
+
 # --- árbol completo (sedes, roles y nodos con sus IPs/columnas) ---
 
 @app.get("/api/tree")
@@ -429,6 +561,7 @@ def create_node(node: NodeIn, _auth=Depends(require_admin)):
             cidr = node.cidr
 
         position = next_position(conn, node.parent_id, site, role)
+        push_undo(conn)
         cur = conn.execute(
             "INSERT INTO nodes (parent_id, site, role, node_type, name, description, cidr, position) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -453,6 +586,7 @@ def update_node(node_id: int, patch: NodeUpdate, _auth=Depends(require_admin)):
             validate_cidr(patch.cidr)
             cidr = patch.cidr
 
+        push_undo(conn)
         conn.execute(
             "UPDATE nodes SET name=?, description=?, cidr=? WHERE id=?",
             (name, description, cidr, node_id),
@@ -466,6 +600,7 @@ def delete_node(node_id: int, _auth=Depends(require_admin)):
         row = conn.execute("SELECT id FROM nodes WHERE id=?", (node_id,)).fetchone()
         if not row:
             raise HTTPException(404, "Ez da aurkitu")
+        push_undo(conn)
         conn.execute("DELETE FROM nodes WHERE id=?", (node_id,))
     return {"ok": True}
 
@@ -513,6 +648,7 @@ def move_node(node_id: int, body: MoveIn, _auth=Depends(require_admin)):
         else:
             ids.append(node_id)
 
+        push_undo(conn)
         conn.execute(
             "UPDATE nodes SET parent_id=?, site=?, role=? WHERE id=?",
             (new_parent_id, new_site, new_role, node_id),
@@ -631,6 +767,7 @@ def add_range_column(node_id: int, body: RangeColumnIn, _auth=Depends(require_ad
         get_range_node(conn, node_id)
         if not conn.execute("SELECT id FROM columns_catalog WHERE id=?", (body.column_id,)).fetchone():
             raise HTTPException(404, "Zutabea ez da aurkitu")
+        push_undo(conn)
         conn.execute(
             "INSERT OR IGNORE INTO range_columns (node_id, column_id) VALUES (?, ?)",
             (node_id, body.column_id),
@@ -642,6 +779,7 @@ def add_range_column(node_id: int, body: RangeColumnIn, _auth=Depends(require_ad
 def remove_range_column(node_id: int, column_id: int, _auth=Depends(require_admin)):
     with get_db() as conn:
         get_range_node(conn, node_id)
+        push_undo(conn)
         conn.execute(
             "DELETE FROM range_columns WHERE node_id=? AND column_id=?", (node_id, column_id)
         )
@@ -677,11 +815,13 @@ def set_ip_value(node_id: int, body: IpValueSet, _auth=Depends(require_auth)):
         if not entry:
             if value is None:
                 return {"ok": True}
+            push_undo(conn)
             entry_id = conn.execute(
                 "INSERT INTO ip_entries (node_id, ip) VALUES (?, ?)", (node_id, body.ip)
             ).lastrowid
         else:
             entry_id = entry["id"]
+            push_undo(conn)
 
         conn.execute(
             "INSERT INTO ip_values (ip_entry_id, column_id, value) VALUES (?, ?, ?) "

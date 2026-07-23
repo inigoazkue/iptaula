@@ -96,6 +96,13 @@
   #dark-toggle-btn { display: flex; align-items: center; justify-content: center; padding: 6px 9px; }
   #dark-toggle-btn svg { width: 16px; height: 16px; display: block; }
 
+  #undo-btn, #redo-btn, #modal-undo-btn, #modal-redo-btn {
+    display: flex; align-items: center; justify-content: center; padding: 6px 9px;
+  }
+  #undo-btn svg, #redo-btn svg, #modal-undo-btn svg, #modal-redo-btn svg { width: 16px; height: 16px; display: block; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+  .modal-header-actions { display: flex; gap: 6px; align-items: center; }
+
   #settings-btn {
     position: fixed; bottom: 22px; right: 22px; width: 46px; height: 46px;
     border-radius: 50%; display: flex; align-items: center; justify-content: center;
@@ -166,19 +173,7 @@
   .node-name { font-weight: 700; font-size: 0.88rem; }
   .node-desc { color: var(--text-secondary); font-size: 0.76rem; display: block; margin-top: 2px; }
   .node-cidr { color: var(--text-secondary); font-size: 0.78rem; font-family: ui-monospace, monospace; margin-top: 3px; }
-  .node-cols { color: var(--text-muted); font-size: 0.74rem; display: block; margin-top: 2px; }
   .node-ctrl { display: flex; gap: 8px; white-space: nowrap; }
-
-  .mini-ip-table { width: 100%; border-collapse: collapse; margin-top: 6px; }
-  .mini-ip-table th, .mini-ip-table td {
-    font-size: 0.68rem; padding: 2px 5px; text-align: left;
-    border: none; border-bottom: 1px solid var(--gridline);
-    font-family: ui-monospace, monospace; background: none;
-  }
-  .mini-ip-table th { font-family: system-ui, sans-serif; color: var(--text-muted); font-weight: 600; }
-  .mini-ip-table tr:last-child td { border-bottom: none; }
-  .mini-ip-table tr.ip-row-search-match td { background: var(--search-match); }
-  .mini-ip-more { font-size: 0.68rem; color: var(--text-muted); display: block; margin-top: 4px; }
 
   .node-children { margin: 8px 0 2px 14px; padding-left: 10px; border-left: 2px solid var(--gridline); cursor: default; }
   .node-add-row {
@@ -223,6 +218,16 @@
   table.ip-table input { width: 100%; font-size: 0.78rem; padding: 4px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface-1); color: var(--text-primary); }
   table.ip-table tr.ip-row-free  { background: var(--row-free); }
   table.ip-table tr.ip-row-used  { background: var(--row-used); }
+  table.ip-table .ping-col { width: 30px; text-align: center; }
+  button.ping-btn {
+    width: 15px; height: 15px; border-radius: 50%; padding: 0; margin: 0 auto; display: block;
+    border: 1px solid var(--border); background: var(--text-muted); opacity: 0.45;
+  }
+  button.ping-btn:hover { transform: none; box-shadow: none; opacity: 0.8; }
+  button.ping-btn.pinging { background: #ec9a3c; opacity: 1; animation: ping-pulse 0.9s ease-in-out infinite; }
+  button.ping-btn.ok   { background: #3fb56d; opacity: 1; }
+  button.ping-btn.fail { background: #d4514f; opacity: 1; }
+  @keyframes ping-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
 
   .catalog-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--gridline); font-size: 0.85rem; }
   .catalog-row:last-child { border-bottom: none; }
@@ -249,6 +254,8 @@
     <p class="subtitle">Egoitzen eta sare moten araberako sare-taula.</p>
   </div>
   <div class="topbar-right">
+    <button class="btn-neutral" id="undo-btn" style="display:none;" title="Desegin" disabled></button>
+    <button class="btn-neutral" id="redo-btn" style="display:none;" title="Berregin" disabled></button>
     <button class="btn-neutral" id="dark-toggle-btn" title="Modua aldatu"></button>
     <div id="auth-area"></div>
   </div>
@@ -289,6 +296,10 @@ let currentSearch = {matchedNodeIds: new Set(), expandIds: new Set(), ipMatches:
 
 const SUN_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>`;
 const MOON_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>`;
+const UNDO_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H12"/></svg>`;
+const REDO_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 000 11H12"/></svg>`;
+document.getElementById('undo-btn').innerHTML = UNDO_ICON;
+document.getElementById('redo-btn').innerHTML = REDO_ICON;
 
 async function api(path, opts) {
   const resp = await fetch(`/api${path}`, {headers: {'Content-Type': 'application/json'}, ...opts});
@@ -315,7 +326,48 @@ async function refresh() {
   renderGrid();
   renderAuthUI();
   renderSettingsButton();
+  await renderHistoryButtons();
 }
+
+/* ---------- desegin / berregin ---------- */
+
+async function renderHistoryButtons() {
+  const undoBtn = document.getElementById('undo-btn');
+  const redoBtn = document.getElementById('redo-btn');
+  if (!isAuthenticated) {
+    undoBtn.style.display = 'none';
+    redoBtn.style.display = 'none';
+    return;
+  }
+  undoBtn.style.display = 'flex';
+  redoBtn.style.display = 'flex';
+  const status = await api('/history-status');
+  undoBtn.disabled = !status.can_undo;
+  redoBtn.disabled = !status.can_redo;
+  const modalUndoBtn = document.getElementById('modal-undo-btn');
+  const modalRedoBtn = document.getElementById('modal-redo-btn');
+  if (modalUndoBtn) modalUndoBtn.disabled = !status.can_undo;
+  if (modalRedoBtn) modalRedoBtn.disabled = !status.can_redo;
+}
+
+async function performHistoryAction(path) {
+  try {
+    await api(path, {method: 'POST'});
+    await refresh();
+    if (currentRangeModalNodeId) {
+      if (findNodeById(currentRangeModalNodeId, allTopNodes())) {
+        await renderRangeModal(currentRangeModalNodeId);
+      } else {
+        document.getElementById('range-modal').close();
+      }
+    }
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+document.getElementById('undo-btn').addEventListener('click', () => performHistoryAction('/undo'));
+document.getElementById('redo-btn').addEventListener('click', () => performHistoryAction('/redo'));
 
 function escapeAttr(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -650,27 +702,6 @@ function renderNode(node, site, role, siblings) {
   el.className = `node ${node.node_type}${isSearchMatch ? ' search-match' : ''}`;
 
   const body = document.createElement('div');
-  const cols = node.columns || [];
-  const entries = node.ip_entries || [];
-  const matchedIps = currentSearch.ipMatches.get(node.id);
-  const MAX_PREVIEW_ROWS = 6;
-
-  let ipPreview = '';
-  if (node.node_type === 'rango' && entries.length) {
-    let ordered = entries;
-    if (matchedIps && matchedIps.size) {
-      ordered = [...entries].sort((a, b) => (matchedIps.has(b.ip) ? 1 : 0) - (matchedIps.has(a.ip) ? 1 : 0));
-    }
-    const shown = ordered.slice(0, MAX_PREVIEW_ROWS);
-    ipPreview = `
-      <table class="mini-ip-table">
-        <tr><th>IP</th>${cols.map(c => `<th>${escapeHtml(c.name)}</th>`).join('')}</tr>
-        ${shown.map(e => `<tr class="${matchedIps && matchedIps.has(e.ip) ? 'ip-row-search-match' : ''}"><td>${e.ip}</td>${cols.map(c => `<td>${escapeHtml(e.values[String(c.id)] || '')}</td>`).join('')}</tr>`).join('')}
-      </table>
-      ${entries.length > MAX_PREVIEW_ROWS ? `<span class="mini-ip-more">+${entries.length - MAX_PREVIEW_ROWS} gehiago - ireki guztiak ikusteko</span>` : ''}
-    `;
-  }
-  const colNames = cols.map(c => escapeHtml(c.name)).join(', ');
 
   body.innerHTML = `
     <div class="node-head">
@@ -682,8 +713,6 @@ function renderNode(node, site, role, siblings) {
     </div>
     ${node.description ? `<span class="node-desc">${escapeHtml(node.description)}</span>` : ''}
     ${node.node_type === 'rango' ? `<span class="node-cidr">${node.cidr}</span>` : ''}
-    ${node.node_type === 'rango' && !entries.length && colNames ? `<span class="node-cols">Zutabeak: ${colNames}</span>` : ''}
-    ${ipPreview}
   `;
   el.appendChild(body);
 
@@ -919,7 +948,13 @@ async function renderRangeModal(nodeId) {
   body.innerHTML = `
     <div class="modal-header">
       <h2>${escapeHtml(node.name)}</h2>
-      <button class="btn-neutral" id="close-range-modal">Itxi</button>
+      <span class="modal-header-actions">
+        ${isAuthenticated ? `
+          <button class="btn-neutral" id="modal-undo-btn" title="Desegin" disabled>${UNDO_ICON}</button>
+          <button class="btn-neutral" id="modal-redo-btn" title="Berregin" disabled>${REDO_ICON}</button>
+        ` : ''}
+        <button class="btn-neutral" id="close-range-modal">Itxi</button>
+      </span>
     </div>
 
     <div class="modal-section">
@@ -962,8 +997,13 @@ async function renderRangeModal(nodeId) {
   `;
 
   renderIpTable(node);
+  await renderHistoryButtons();
 
   document.getElementById('close-range-modal').addEventListener('click', () => document.getElementById('range-modal').close());
+  if (isAuthenticated) {
+    document.getElementById('modal-undo-btn').addEventListener('click', () => performHistoryAction('/undo'));
+    document.getElementById('modal-redo-btn').addEventListener('click', () => performHistoryAction('/redo'));
+  }
 
   if (isAdmin()) {
     document.getElementById('range-meta-form').addEventListener('submit', async (e) => {
@@ -1024,6 +1064,31 @@ function hostsOf(cidr) {
 
 const IP_TABLE_MAX_ROWS = 1024;
 
+async function runPing(btn) {
+  btn.classList.remove('ok', 'fail');
+  btn.classList.add('pinging');
+  btn.disabled = true;
+  try {
+    const result = await api(`/ping/${btn.dataset.ip}`);
+    btn.classList.remove('pinging');
+    if (result.reachable) {
+      btn.classList.add('ok');
+      btn.title = 'Erantzun du';
+    } else {
+      btn.classList.add('fail');
+      btn.title = result.rejected
+        ? 'Bidean ukatu dute (ez da helmugara iritsi)'
+        : 'Ez du erantzun (denbora-muga: ezin da bereizi helmugara iritsi eta erantzunik jaso ez den, ala bidean galdu den)';
+    }
+  } catch (err) {
+    btn.classList.remove('pinging');
+    btn.classList.add('fail');
+    btn.title = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 function renderIpTable(node) {
   const wrap = document.getElementById('ip-table-wrap');
   const cols = node.columns || [];
@@ -1051,7 +1116,7 @@ function renderIpTable(node) {
   const table = document.createElement('table');
   table.className = 'ip-table';
   table.innerHTML = `
-    <tr><th>IP</th>${cols.map(c => `<th>${escapeHtml(c.name)}</th>`).join('')}</tr>
+    <tr><th>IP</th>${isAuthenticated ? '<th class="ping-col"></th>' : ''}${cols.map(c => `<th>${escapeHtml(c.name)}</th>`).join('')}</tr>
     ${hosts.map(ip => {
       const entry = entryByIp[ip];
       const cells = cols.map(c => {
@@ -1060,12 +1125,19 @@ function renderIpTable(node) {
           ? `<td><input data-col="${c.id}" value="${escapeAttr(val)}"></td>`
           : `<td>${escapeHtml(val)}</td>`;
       }).join('');
-      return `<tr data-ip="${ip}" class="${entry ? 'ip-row-used' : 'ip-row-free'}"><td>${ip}</td>${cells}</tr>`;
+      const pingCell = isAuthenticated
+        ? `<td class="ping-col"><button type="button" class="ping-btn" data-ip="${ip}" title="Ping egin"></button></td>`
+        : '';
+      return `<tr data-ip="${ip}" class="${entry ? 'ip-row-used' : 'ip-row-free'}"><td>${ip}</td>${pingCell}${cells}</tr>`;
     }).join('')}
   `;
   wrap.appendChild(table);
 
   if (!isAuthenticated) return;
+
+  table.querySelectorAll('button.ping-btn').forEach(btn => {
+    btn.addEventListener('click', () => runPing(btn));
+  });
 
   table.querySelectorAll('input[data-col]').forEach(input => {
     input.addEventListener('blur', async () => {

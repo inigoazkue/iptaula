@@ -2,6 +2,18 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/). Este proyecto usa versionado semántico.
 
+## [1.1.0] - 2026-07-23
+
+### Añadido
+
+- Reordenar y mover agrupaciones/rangos arrastrando y soltando (en vez de solo al crearlos), incluyendo soltar directamente sobre una agrupación colapsada y un resaltado visual de la zona de destino (antes/después/dentro).
+- Deshacer/rehacer (hasta 4 pasos) para altas, cambios, borrados y movimientos de la estructura y de los valores de IP, con dos botones en la página principal y en el modal de edición de rango.
+- Botón de ping por IP en el modal de edición: verde si responde, naranja mientras lo intenta (hasta 6 intentos), rojo si no llega.
+
+### Cambiado
+
+- La vista previa de cada rango en la matriz general ya no muestra una mini-tabla de IPs; solo nombre, descripción y CIDR, para que las tarjetas ocupen menos espacio.
+
 ## [1.0.0] - 2026-07-24
 
 Primera versión estable. Sustituye por completo al sistema anterior de tablas en Word exportadas a HTML.
