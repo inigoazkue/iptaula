@@ -71,6 +71,7 @@
   .subtitle { color: var(--text-secondary); margin: 0 0 16px; font-size: 0.9rem; }
 
   .topbar { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 18px; flex-wrap: wrap; gap: 10px; }
+  .topbar-right { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 
   button, .btn {
     font-family: inherit; cursor: pointer; border: none; border-radius: 8px;
@@ -92,6 +93,11 @@
   }
   .btn-text:hover { color: var(--btn-blue-ink); text-decoration-color: currentColor; transform: none; box-shadow: none; }
 
+  #search-box {
+    padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface-1); color: var(--text-primary); font-size: 0.82rem; min-width: 220px;
+  }
+
   table { border-collapse: collapse; width: 100%; table-layout: fixed; }
   th, td {
     border: 1px solid var(--gridline); vertical-align: top;
@@ -104,7 +110,7 @@
   th:first-child { width: 130px; }
 
   .cell-actions {
-    display: flex; gap: 8px; margin-bottom: 8px;
+    display: flex; gap: 8px; margin-bottom: 8px; min-height: 1px;
     opacity: 0; pointer-events: none; transition: opacity 150ms ease;
   }
   td:hover > .cell-actions, td:hover .cell-actions { opacity: 1; pointer-events: auto; }
@@ -116,6 +122,7 @@
   }
   .node.rango { background: var(--rango-bg); border-color: var(--rango-border); }
   .node.agrupacion { background: var(--group-bg); border-color: var(--group-border); border-style: dashed; }
+  .node.search-match { outline: 3px solid var(--search-match); outline-offset: 1px; }
   .node-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
   .node-name { font-weight: 700; font-size: 0.88rem; }
   .node-desc { color: var(--text-secondary); font-size: 0.76rem; display: block; margin-top: 2px; }
@@ -131,6 +138,7 @@
   }
   .mini-ip-table th { font-family: system-ui, sans-serif; color: var(--text-muted); font-weight: 600; }
   .mini-ip-table tr:last-child td { border-bottom: none; }
+  .mini-ip-table tr.ip-row-search-match td { background: var(--search-match); }
   .mini-ip-more { font-size: 0.68rem; color: var(--text-muted); display: block; margin-top: 4px; }
 
   .node-children { margin: 8px 0 2px 14px; padding-left: 10px; border-left: 2px solid var(--gridline); cursor: default; }
@@ -177,9 +185,6 @@
   table.ip-table tr.ip-row-free  { background: var(--row-free); }
   table.ip-table tr.ip-row-used  { background: var(--row-used); }
 
-  .node.search-match { outline: 3px solid var(--search-match); outline-offset: 1px; }
-  .mini-ip-table tr.ip-row-search-match td { background: var(--search-match); }
-
   .catalog-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--gridline); font-size: 0.85rem; }
   .catalog-row:last-child { border-bottom: none; }
 
@@ -193,9 +198,12 @@
     <h1>IP Taula</h1>
     <p class="subtitle">Sedeen eta sare moten araberako sare-taula.</p>
   </div>
-  <div style="display:flex; gap:10px; align-items:center;">
-    <input type="text" id="search-box" placeholder="Buscar IP, nombre, hostname..." style="padding:7px 12px; border:1px solid var(--border); border-radius:8px; background:var(--surface-1); color:var(--text-primary); font-size:0.82rem; min-width:220px;">
-    <button class="btn-neutral" id="manage-columns-btn">Zutabeak kudeatu</button>
+  <div class="topbar-right">
+    <input type="text" id="search-box" placeholder="Buscar IP, nombre, hostname...">
+    <button class="btn-neutral" id="dark-toggle-btn"></button>
+    <button class="btn-neutral" id="manage-matrix-btn" style="display:none;">Matrizea kudeatu</button>
+    <button class="btn-neutral" id="manage-columns-btn" style="display:none;">Zutabeak kudeatu</button>
+    <div id="auth-area"></div>
   </div>
 </div>
 
@@ -204,20 +212,19 @@
 
 <dialog id="range-modal"><div class="modal-inner" id="range-modal-body"></div></dialog>
 <dialog id="columns-modal"><div class="modal-inner" id="columns-modal-body"></div></dialog>
+<dialog id="matrix-modal"><div class="modal-inner" id="matrix-modal-body"></div></dialog>
+<dialog id="login-modal"><div class="modal-inner" id="login-modal-body"></div></dialog>
+<dialog id="password-modal"><div class="modal-inner" id="password-modal-body"></div></dialog>
 
 <script>
-const SITES = [
-  {slug: 'bilbo', label: 'Bilbo'},
-  {slug: 'miramon', label: 'Miramon'},
-  {slug: 'gasteiz', label: 'Gasteiz'},
-  {slug: 'irunea', label: 'Iruñea'},
-  {slug: 'besteak', label: 'Besteak'},
-];
-const ROLES = [
-  {slug: 'gestioa', label: 'Gestioa'},
-  {slug: 'edukiak', label: 'Edukiak'},
-  {slug: 'produkziorako_sareak', label: 'Produkziorako sareak'},
-];
+let SITES = [];
+let ROLES = [];
+let TREE = null;
+let COLUMNS = [];
+let isAuthenticated = false;
+let currentUsername = null;
+const expandedGroups = new Set(); // ids de agrupaciones desplegadas, sobrevive a los re-render
+let currentSearch = {matchedNodeIds: new Set(), expandIds: new Set(), ipMatches: new Map()};
 
 async function api(path, opts) {
   const resp = await fetch(`/api${path}`, {headers: {'Content-Type': 'application/json'}, ...opts});
@@ -228,15 +235,141 @@ async function api(path, opts) {
   return resp.status === 204 ? null : resp.json();
 }
 
-let TREE = null;
-let COLUMNS = [];
-const expandedGroups = new Set(); // ids de agrupaciones desplegadas, sobrevive a los re-render
-let currentSearch = {matchedNodeIds: new Set(), expandIds: new Set(), ipMatches: new Map()};
+async function loadAll() {
+  const [treeResp, cols, sess] = await Promise.all([api('/tree'), api('/columns'), api('/session')]);
+  SITES = treeResp.sites.map(s => ({slug: s.slug, label: s.name, id: s.id}));
+  ROLES = treeResp.roles.map(r => ({slug: r.slug, label: r.name, id: r.id}));
+  TREE = treeResp.tree;
+  COLUMNS = cols;
+  isAuthenticated = sess.authenticated;
+  currentUsername = sess.username || null;
+}
 
-// Recorre todo el árbol buscando el texto en nombre/descripción/cidr de
-// cada nodo, y en la IP o los valores de columna de cada entrada. Devuelve
-// qué nodos resaltar, qué agrupaciones desplegar para llegar hasta ellos,
-// y qué IPs concretas resaltar dentro de la vista previa de cada rango.
+async function refresh() {
+  await loadAll();
+  renderGrid();
+  renderAuthUI();
+}
+
+function escapeAttr(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+function escapeHtml(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+}
+
+/* ---------- tema claro/oscuro ---------- */
+
+function systemPrefersDark() {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+function isEffectivelyDark() {
+  const current = document.documentElement.getAttribute('data-theme');
+  return current === 'dark' || (!current && systemPrefersDark());
+}
+function updateThemeButtonLabel() {
+  document.getElementById('dark-toggle-btn').textContent = isEffectivelyDark() ? 'Modu argia' : 'Modu iluna';
+}
+function initTheme() {
+  const saved = localStorage.getItem('iptaula-theme');
+  if (saved) document.documentElement.setAttribute('data-theme', saved);
+  updateThemeButtonLabel();
+}
+document.getElementById('dark-toggle-btn').addEventListener('click', () => {
+  const next = isEffectivelyDark() ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('iptaula-theme', next);
+  updateThemeButtonLabel();
+});
+initTheme();
+
+/* ---------- autenticación (login/logout/cambio de contraseña) ---------- */
+
+function renderAuthUI() {
+  document.getElementById('manage-matrix-btn').style.display = isAuthenticated ? '' : 'none';
+  document.getElementById('manage-columns-btn').style.display = isAuthenticated ? '' : 'none';
+  const authArea = document.getElementById('auth-area');
+  if (isAuthenticated) {
+    authArea.innerHTML = `
+      <span style="font-size:0.78rem; color:var(--text-secondary); margin-right:2px;">${escapeHtml(currentUsername)}</span>
+      <button class="btn-text" id="change-password-btn">contraseña</button>
+      <button class="btn-neutral" id="logout-btn">Itxi saioa</button>
+    `;
+    document.getElementById('logout-btn').addEventListener('click', async () => {
+      await api('/logout', {method: 'POST'});
+      await refresh();
+    });
+    document.getElementById('change-password-btn').addEventListener('click', () => openPasswordModal());
+  } else {
+    authArea.innerHTML = `<button class="btn-blue" id="login-btn">Hasi saioa</button>`;
+    document.getElementById('login-btn').addEventListener('click', () => openLoginModal());
+  }
+}
+
+function openLoginModal() {
+  const body = document.getElementById('login-modal-body');
+  body.innerHTML = `
+    <div class="modal-header">
+      <h2>Hasi saioa</h2>
+      <button class="btn-neutral" id="close-login-modal">Cerrar</button>
+    </div>
+    <form class="inline-form" id="login-form">
+      <input name="username" placeholder="Usuario" required style="flex:1 1 100%;">
+      <input name="password" type="password" placeholder="Contraseña" required style="flex:1 1 100%;">
+      <button type="submit" class="btn-blue">Entrar</button>
+    </form>
+    <div class="form-error" id="login-error"></div>
+  `;
+  document.getElementById('close-login-modal').addEventListener('click', () => document.getElementById('login-modal').close());
+  document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    document.getElementById('login-error').textContent = '';
+    try {
+      await api('/login', {method: 'POST', body: JSON.stringify({
+        username: e.target.username.value, password: e.target.password.value,
+      })});
+      document.getElementById('login-modal').close();
+      await refresh();
+    } catch (err) {
+      document.getElementById('login-error').textContent = err.message;
+    }
+  });
+  document.getElementById('login-modal').showModal();
+}
+
+function openPasswordModal() {
+  const body = document.getElementById('password-modal-body');
+  body.innerHTML = `
+    <div class="modal-header">
+      <h2>Pasahitza aldatu</h2>
+      <button class="btn-neutral" id="close-password-modal">Cerrar</button>
+    </div>
+    <form class="inline-form" id="password-form">
+      <input name="current" type="password" placeholder="Contraseña actual" required style="flex:1 1 100%;">
+      <input name="next" type="password" placeholder="Contraseña nueva" required style="flex:1 1 100%;">
+      <button type="submit" class="btn-blue">Guardar</button>
+    </form>
+    <div class="form-error" id="password-error"></div>
+  `;
+  document.getElementById('close-password-modal').addEventListener('click', () => document.getElementById('password-modal').close());
+  document.getElementById('password-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    document.getElementById('password-error').textContent = '';
+    try {
+      await api('/change-password', {method: 'POST', body: JSON.stringify({
+        current_password: e.target.current.value, new_password: e.target.next.value,
+      })});
+      document.getElementById('password-modal').close();
+      alert('Contraseña actualizada.');
+    } catch (err) {
+      document.getElementById('password-error').textContent = err.message;
+    }
+  });
+  document.getElementById('password-modal').showModal();
+}
+
+/* ---------- búsqueda ---------- */
+
 function computeSearch(query) {
   const q = query.trim().toLowerCase();
   const result = {matchedNodeIds: new Set(), expandIds: new Set(), ipMatches: new Map()};
@@ -272,32 +405,27 @@ function computeSearch(query) {
   }
 
   for (const site of SITES) for (const role of ROLES) {
-    TREE[site.slug][role.slug].forEach(n => visit(n, []));
+    (TREE[site.slug][role.slug] || []).forEach(n => visit(n, []));
   }
   return result;
 }
 
-async function loadAll() {
-  [TREE, COLUMNS] = await Promise.all([api('/tree'), api('/columns')]);
-}
-
-async function refresh() {
-  await loadAll();
-  renderGrid();
-}
-
-function escapeAttr(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-}
-function escapeHtml(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
-}
+let searchDebounce;
+document.getElementById('search-box').addEventListener('input', (e) => {
+  clearTimeout(searchDebounce);
+  const query = e.target.value;
+  searchDebounce = setTimeout(() => {
+    currentSearch = computeSearch(query);
+    renderGrid();
+  }, 200);
+});
 
 /* ---------- formularios de alta/edición de nodos ---------- */
 
 function addButtons(parentId, site, role, onDone) {
   const wrap = document.createElement('div');
   wrap.className = 'cell-actions';
+  if (!isAuthenticated) return wrap;
   const addRango = document.createElement('button');
   addRango.className = 'btn-blue'; addRango.textContent = '+ rango';
   const addGroup = document.createElement('button');
@@ -419,8 +547,8 @@ function renderNode(node, site, role) {
     <div class="node-head">
       <span class="node-name">${escapeHtml(node.name)}</span>
       <span class="node-ctrl">
-        ${node.node_type === 'agrupacion' ? '<button class="btn-text" data-action="edit">editar</button>' : ''}
-        <button class="btn-text" data-action="delete">borrar</button>
+        ${isAuthenticated && node.node_type === 'agrupacion' ? '<button class="btn-text" data-action="edit">editar</button>' : ''}
+        ${isAuthenticated ? '<button class="btn-text" data-action="delete">borrar</button>' : ''}
       </span>
     </div>
     ${node.description ? `<span class="node-desc">${escapeHtml(node.description)}</span>` : ''}
@@ -442,17 +570,21 @@ function renderNode(node, site, role) {
     childrenBox.appendChild(addRow);
     el.appendChild(childrenBox);
 
-    body.querySelector('[data-action="edit"]').addEventListener('click', (e) => {
-      e.stopPropagation();
-      const form = buildEditForm(node, async (changed) => { changed ? await refresh() : form.replaceWith(body); });
-      body.replaceWith(form);
-    });
+    if (isAuthenticated) {
+      body.querySelector('[data-action="edit"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const form = buildEditForm(node, async (changed) => { changed ? await refresh() : form.replaceWith(body); });
+        body.replaceWith(form);
+      });
+    }
   }
 
-  body.querySelector('[data-action="delete"]').addEventListener('click', (e) => {
-    e.stopPropagation();
-    deleteNode(node);
-  });
+  if (isAuthenticated) {
+    body.querySelector('[data-action="delete"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteNode(node);
+    });
+  }
 
   // clic en toda la tarjeta. Se para la propagación siempre (para que una
   // tarjeta hija, o cualquier botón/input dentro - alta, edición, etc. -
@@ -490,7 +622,7 @@ function renderGrid() {
     const th = document.createElement('th'); th.textContent = role.label; tr.appendChild(th);
     for (const site of SITES) {
       const td = document.createElement('td');
-      TREE[site.slug][role.slug].forEach(node => td.appendChild(renderNode(node, site.slug, role.slug)));
+      (TREE[site.slug][role.slug] || []).forEach(node => td.appendChild(renderNode(node, site.slug, role.slug)));
       td.appendChild(addButtons(null, site.slug, role.slug, refresh));
       tr.appendChild(td);
     }
@@ -514,7 +646,7 @@ function findNodeById(id, nodes) {
 
 function allTopNodes() {
   const acc = [];
-  for (const site of SITES) for (const role of ROLES) acc.push(...TREE[site.slug][role.slug]);
+  for (const site of SITES) for (const role of ROLES) acc.push(...(TREE[site.slug][role.slug] || []));
   return acc;
 }
 
@@ -546,31 +678,39 @@ async function renderRangeModal(nodeId) {
 
     <div class="modal-section">
       <h3>Datos del rango</h3>
-      <form class="inline-form" id="range-meta-form">
-        <input name="name" value="${escapeAttr(node.name)}" placeholder="Nombre" required>
-        <input name="cidr" value="${escapeAttr(node.cidr)}" placeholder="10.1.2.0/24" required>
-        <input name="description" value="${escapeAttr(node.description || '')}" placeholder="Descripción (opcional)">
-        <button type="submit" class="btn-blue">Guardar</button>
-      </form>
+      ${isAuthenticated ? `
+        <form class="inline-form" id="range-meta-form">
+          <input name="name" value="${escapeAttr(node.name)}" placeholder="Nombre" required>
+          <input name="cidr" value="${escapeAttr(node.cidr)}" placeholder="10.1.2.0/24" required>
+          <input name="description" value="${escapeAttr(node.description || '')}" placeholder="Descripción (opcional)">
+          <button type="submit" class="btn-blue">Guardar</button>
+        </form>
+      ` : `
+        <p class="node-desc">${escapeHtml(node.cidr)}${node.description ? ' - ' + escapeHtml(node.description) : ''}</p>
+      `}
     </div>
 
     <div class="modal-section">
       <h3>Columnas activas</h3>
       <div id="active-columns">
-        ${(node.columns || []).map(c => `<span class="col-chip">${escapeHtml(c.name)} <button data-col="${c.id}" title="Quitar columna">×</button></span>`).join('') || '<span class="node-desc">Ninguna todavía.</span>'}
+        ${(node.columns || []).map(c => `<span class="col-chip">${escapeHtml(c.name)} ${isAuthenticated ? `<button data-col="${c.id}" title="Quitar columna">×</button>` : ''}</span>`).join('') || '<span class="node-desc">Ninguna todavía.</span>'}
       </div>
-      <form class="inline-form" id="add-column-form">
-        <select name="column_id" ${availableCols.length ? '' : 'disabled'}>
-          ${availableCols.length ? availableCols.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('') : '<option>No hay más columnas en el catálogo</option>'}
-        </select>
-        <button type="submit" class="btn-green" ${availableCols.length ? '' : 'disabled'}>+ Añadir al rango</button>
-        <button type="button" class="btn-text" id="open-columns-catalog">Gestionar columnas...</button>
-      </form>
+      ${isAuthenticated ? `
+        <form class="inline-form" id="add-column-form">
+          <select name="column_id" ${availableCols.length ? '' : 'disabled'}>
+            ${availableCols.length ? availableCols.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('') : '<option>No hay más columnas en el catálogo</option>'}
+          </select>
+          <button type="submit" class="btn-green" ${availableCols.length ? '' : 'disabled'}>+ Añadir al rango</button>
+          <button type="button" class="btn-text" id="open-columns-catalog">Gestionar columnas...</button>
+        </form>
+      ` : ''}
     </div>
 
     <div class="modal-section">
       <h3>Direcciones IP</h3>
-      <p class="node-desc" style="margin-bottom:8px;">Se listan todas las IPs del rango. Escribe directamente en una celda para guardarla (se guarda sola al salir del campo); una fila sin ningún dato se considera libre.</p>
+      ${isAuthenticated
+        ? '<p class="node-desc" style="margin-bottom:8px;">Se listan todas las IPs del rango. Escribe directamente en una celda para guardarla (se guarda sola al salir del campo); una fila sin ningún dato se considera libre.</p>'
+        : '<p class="node-desc" style="margin-bottom:8px;">Inicia sesión para poder editar. Verde = libre, naranja = ocupada.</p>'}
       <div id="ip-table-wrap"></div>
     </div>
   `;
@@ -579,37 +719,39 @@ async function renderRangeModal(nodeId) {
 
   document.getElementById('close-range-modal').addEventListener('click', () => document.getElementById('range-modal').close());
 
-  document.getElementById('range-meta-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const f = e.target;
-    try {
-      await api(`/nodes/${node.id}`, {method: 'PATCH', body: JSON.stringify({
-        name: f.name.value, cidr: f.cidr.value, description: f.description.value || null,
-      })});
-      await refresh();
-      await renderRangeModal(nodeId);
-    } catch (err) { alert(err.message); }
-  });
+  if (isAuthenticated) {
+    document.getElementById('range-meta-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = e.target;
+      try {
+        await api(`/nodes/${node.id}`, {method: 'PATCH', body: JSON.stringify({
+          name: f.name.value, cidr: f.cidr.value, description: f.description.value || null,
+        })});
+        await refresh();
+        await renderRangeModal(nodeId);
+      } catch (err) { alert(err.message); }
+    });
 
-  document.getElementById('add-column-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const colId = e.target.column_id.value;
-    if (!colId) return;
-    await api(`/nodes/${node.id}/columns`, {method: 'POST', body: JSON.stringify({column_id: Number(colId)})});
-    await refresh();
-    await renderRangeModal(nodeId);
-  });
-
-  body.querySelectorAll('#active-columns button').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      if (!confirm('¿Quitar esta columna del rango? Se perderán sus valores en este rango.')) return;
-      await api(`/nodes/${node.id}/columns/${btn.dataset.col}`, {method: 'DELETE'});
+    document.getElementById('add-column-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const colId = e.target.column_id.value;
+      if (!colId) return;
+      await api(`/nodes/${node.id}/columns`, {method: 'POST', body: JSON.stringify({column_id: Number(colId)})});
       await refresh();
       await renderRangeModal(nodeId);
     });
-  });
 
-  document.getElementById('open-columns-catalog').addEventListener('click', () => openColumnsModal());
+    body.querySelectorAll('#active-columns button').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('¿Quitar esta columna del rango? Se perderán sus valores en este rango.')) return;
+        await api(`/nodes/${node.id}/columns/${btn.dataset.col}`, {method: 'DELETE'});
+        await refresh();
+        await renderRangeModal(nodeId);
+      });
+    });
+
+    document.getElementById('open-columns-catalog').addEventListener('click', () => openColumnsModal());
+  }
 }
 
 function ipToInt(ip) {
@@ -666,13 +808,18 @@ function renderIpTable(node) {
     <tr><th>IP</th>${cols.map(c => `<th>${escapeHtml(c.name)}</th>`).join('')}</tr>
     ${hosts.map(ip => {
       const entry = entryByIp[ip];
-      return `<tr data-ip="${ip}" class="${entry ? 'ip-row-used' : 'ip-row-free'}">
-        <td>${ip}</td>
-        ${cols.map(c => `<td><input data-col="${c.id}" value="${escapeAttr(entry ? (entry.values[String(c.id)] || '') : '')}"></td>`).join('')}
-      </tr>`;
+      const cells = cols.map(c => {
+        const val = entry ? (entry.values[String(c.id)] || '') : '';
+        return isAuthenticated
+          ? `<td><input data-col="${c.id}" value="${escapeAttr(val)}"></td>`
+          : `<td>${escapeHtml(val)}</td>`;
+      }).join('');
+      return `<tr data-ip="${ip}" class="${entry ? 'ip-row-used' : 'ip-row-free'}"><td>${ip}</td>${cells}</tr>`;
     }).join('')}
   `;
   wrap.appendChild(table);
+
+  if (!isAuthenticated) return;
 
   table.querySelectorAll('input[data-col]').forEach(input => {
     input.addEventListener('blur', async () => {
@@ -760,15 +907,85 @@ async function afterCatalogChange() {
 
 document.getElementById('manage-columns-btn').addEventListener('click', () => openColumnsModal());
 
-let searchDebounce;
-document.getElementById('search-box').addEventListener('input', (e) => {
-  clearTimeout(searchDebounce);
-  const query = e.target.value;
-  searchDebounce = setTimeout(() => {
-    currentSearch = computeSearch(query);
-    renderGrid();
-  }, 200);
-});
+/* ---------- modal de gestión de la matriz (sedes y roles) ---------- */
+
+async function openMatrixModal() {
+  await renderMatrixModal();
+  document.getElementById('matrix-modal').showModal();
+}
+
+async function renderMatrixModal() {
+  const body = document.getElementById('matrix-modal-body');
+  body.innerHTML = `
+    <div class="modal-header">
+      <h2>Matrizea kudeatu</h2>
+      <button class="btn-neutral" id="close-matrix-modal">Cerrar</button>
+    </div>
+    <div class="modal-section">
+      <h3>Sedeak (columnas)</h3>
+      <div id="site-list">
+        ${SITES.map(s => `<div class="catalog-row"><span>${escapeHtml(s.label)}</span><button class="btn-text" data-kind="site" data-id="${s.id}">borrar</button></div>`).join('')}
+      </div>
+      <form class="inline-form" id="new-site-form">
+        <input name="name" placeholder="Nombre de la sede">
+        <button type="submit" class="btn-green">+ Añadir sede</button>
+      </form>
+      <div class="form-error" id="site-form-error"></div>
+    </div>
+    <div class="modal-section">
+      <h3>Sare motak (filas)</h3>
+      <div id="role-list">
+        ${ROLES.map(r => `<div class="catalog-row"><span>${escapeHtml(r.label)}</span><button class="btn-text" data-kind="role" data-id="${r.id}">borrar</button></div>`).join('')}
+      </div>
+      <form class="inline-form" id="new-role-form">
+        <input name="name" placeholder="Nombre del tipo de red">
+        <button type="submit" class="btn-green">+ Añadir tipo</button>
+      </form>
+      <div class="form-error" id="role-form-error"></div>
+    </div>
+  `;
+  document.getElementById('close-matrix-modal').addEventListener('click', () => document.getElementById('matrix-modal').close());
+
+  body.querySelectorAll('button[data-kind]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const endpoint = btn.dataset.kind === 'site' ? 'sites' : 'roles';
+      if (!confirm('¿Borrar? Solo se puede si no hay nada usándola todavía.')) return;
+      try {
+        await api(`/${endpoint}/${btn.dataset.id}`, {method: 'DELETE'});
+        await refresh();
+        await renderMatrixModal();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  });
+
+  document.getElementById('new-site-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    document.getElementById('site-form-error').textContent = '';
+    try {
+      await api('/sites', {method: 'POST', body: JSON.stringify({name: e.target.name.value})});
+      await refresh();
+      await renderMatrixModal();
+    } catch (err) {
+      document.getElementById('site-form-error').textContent = err.message;
+    }
+  });
+
+  document.getElementById('new-role-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    document.getElementById('role-form-error').textContent = '';
+    try {
+      await api('/roles', {method: 'POST', body: JSON.stringify({name: e.target.name.value})});
+      await refresh();
+      await renderMatrixModal();
+    } catch (err) {
+      document.getElementById('role-form-error').textContent = err.message;
+    }
+  });
+}
+
+document.getElementById('manage-matrix-btn').addEventListener('click', () => openMatrixModal());
 
 refresh().catch(err => {
   document.getElementById('status').textContent = `Errorea: ${err.message}`;
