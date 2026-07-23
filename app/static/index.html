@@ -154,9 +154,14 @@
   .node.agrupacion { background: var(--group-bg); border-color: var(--group-border); border-style: dashed; }
   .node.search-match { outline: 3px solid var(--search-match); outline-offset: 1px; }
   .node.dragging { opacity: 0.35; }
-  .node.drop-target { outline: 2px dashed var(--link); outline-offset: 2px; }
-  td.drop-target { outline: 2px dashed var(--link); outline-offset: -2px; }
-  .node-children.drop-target { outline: 2px dashed var(--link); outline-offset: -2px; border-radius: 6px; }
+  /* zonas de soltado: arriba/abajo de una tarjeta = insertar como hermano
+     antes/después; en medio de una agrupación (o su hueco vacío) = meter dentro */
+  .node.drop-before { box-shadow: inset 0 3px 0 0 var(--link); }
+  .node.drop-after  { box-shadow: inset 0 -3px 0 0 var(--link); }
+  .node.drop-inside, td.drop-inside, .node-children.drop-inside {
+    outline: 2px dashed var(--link); outline-offset: 2px; background: var(--btn-neutral-hover);
+  }
+  td.drop-inside, .node-children.drop-inside { outline-offset: -2px; border-radius: 6px; }
   .node-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
   .node-name { font-weight: 700; font-size: 0.88rem; }
   .node-desc { color: var(--text-secondary); font-size: 0.76rem; display: block; margin-top: 2px; }
@@ -636,7 +641,10 @@ async function deleteNode(node) {
 
 /* ---------- matrizeko nodo-txartela ---------- */
 
-function renderNode(node, site, role) {
+function renderNode(node, site, role, siblings) {
+  const siblingIdx = siblings.findIndex(n => n.id === node.id);
+  const nextSiblingId = siblingIdx >= 0 && siblingIdx < siblings.length - 1 ? siblings[siblingIdx + 1].id : null;
+
   const el = document.createElement('div');
   const isSearchMatch = currentSearch.matchedNodeIds.has(node.id);
   el.className = `node ${node.node_type}${isSearchMatch ? ' search-match' : ''}`;
@@ -684,7 +692,7 @@ function renderNode(node, site, role) {
     childrenBox = document.createElement('div');
     childrenBox.className = 'node-children';
     childrenBox.style.display = (expandedGroups.has(node.id) || currentSearch.expandIds.has(node.id)) ? 'block' : 'none';
-    node.children.forEach(child => childrenBox.appendChild(renderNode(child, site, role)));
+    node.children.forEach(child => childrenBox.appendChild(renderNode(child, site, role, node.children)));
     const addRow = document.createElement('div');
     addRow.className = 'node-add-row';
     addRow.appendChild(addButtons(node.id, site, role, refresh));
@@ -706,16 +714,16 @@ function renderNode(node, site, role) {
         if (!draggingNode || draggingNode.id === node.id) return;
         e.preventDefault();
         e.stopPropagation();
-        childrenBox.classList.add('drop-target');
+        childrenBox.classList.add('drop-inside');
       });
       childrenBox.addEventListener('dragleave', (e) => {
         e.stopPropagation();
-        childrenBox.classList.remove('drop-target');
+        childrenBox.classList.remove('drop-inside');
       });
       childrenBox.addEventListener('drop', async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        childrenBox.classList.remove('drop-target');
+        childrenBox.classList.remove('drop-inside');
         if (!draggingNode || draggingNode.id === node.id) return;
         if (collectDescendantIds(draggingNode).has(node.id)) {
           alert('Ezin da talde bat bere ondorengo baten barruan utzi.');
@@ -733,10 +741,17 @@ function renderNode(node, site, role) {
     });
   }
 
-  // arrastrar y soltar (solo admin): la tarjeta entera es arrastrable;
-  // soltar SOBRE otra tarjeta la inserta justo delante de esa tarjeta
-  // (reordena o cambia de sede/rol/grupo según donde esté esa tarjeta);
-  // si es una agrupación, todo lo que tiene dentro se mueve con ella.
+  // Arrastrar y soltar (solo admin): la tarjeta entera es arrastrable. Al
+  // pasar por encima de otra tarjeta, la zona depende de dónde esté el
+  // cursor verticalmente (sobre el "body", no sobre los hijos ya
+  // desplegados, para que no varíe con la altura de un grupo abierto):
+  //   - tercio superior -> insertar como hermano ANTES de esta tarjeta
+  //   - tercio inferior -> insertar como hermano DESPUÉS
+  //   - tercio central, solo si es una agrupación -> meter DENTRO de ella
+  // (una agrupación, sin sitio para el tercio central, solo tiene antes/
+  // después). Así se puede soltar dentro de un grupo sin necesidad de
+  // desplegarlo antes. Si es una agrupación, todo lo que tiene dentro se
+  // mueve con ella (lo hace el backend).
   if (isAdmin()) {
     el.draggable = true;
     el.addEventListener('dragstart', (e) => {
@@ -751,26 +766,50 @@ function renderNode(node, site, role) {
       el.classList.remove('dragging');
       draggingNode = null;
     });
+
+    function dropZoneFor(e) {
+      const rect = body.getBoundingClientRect();
+      const ratio = (e.clientY - rect.top) / rect.height;
+      if (node.node_type === 'agrupacion') {
+        if (ratio < 1 / 3) return 'before';
+        if (ratio > 2 / 3) return 'after';
+        return 'inside';
+      }
+      return ratio < 0.5 ? 'before' : 'after';
+    }
+
     el.addEventListener('dragover', (e) => {
       if (!draggingNode || draggingNode.id === node.id) return;
+      if (collectDescendantIds(draggingNode).has(node.id)) return;
       e.preventDefault();
       e.stopPropagation();
-      el.classList.add('drop-target');
+      el.classList.remove('drop-before', 'drop-after', 'drop-inside');
+      el.classList.add(`drop-${dropZoneFor(e)}`);
     });
     el.addEventListener('dragleave', (e) => {
       e.stopPropagation();
-      el.classList.remove('drop-target');
+      el.classList.remove('drop-before', 'drop-after', 'drop-inside');
     });
     el.addEventListener('drop', async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      el.classList.remove('drop-target');
+      const zone = el.classList.contains('drop-inside') ? 'inside'
+        : el.classList.contains('drop-after') ? 'after' : 'before';
+      el.classList.remove('drop-before', 'drop-after', 'drop-inside');
       if (!draggingNode || draggingNode.id === node.id) return;
       if (collectDescendantIds(draggingNode).has(node.id)) {
         alert('Ezin da talde bat bere ondorengo baten gainean utzi.');
         return;
       }
-      await performMove({parent_id: node.parent_id, site: node.site, role: node.role, before_id: node.id});
+      if (zone === 'inside') {
+        await performMove({parent_id: node.id});
+      } else if (zone === 'before') {
+        await performMove({parent_id: node.parent_id, site: node.site, role: node.role, before_id: node.id});
+      } else if (nextSiblingId) {
+        await performMove({parent_id: node.parent_id, site: node.site, role: node.role, before_id: nextSiblingId});
+      } else {
+        await performMove({parent_id: node.parent_id, site: node.site, role: node.role});
+      }
     });
   }
 
@@ -810,7 +849,8 @@ function renderGrid() {
     const th = document.createElement('th'); th.textContent = role.label; tr.appendChild(th);
     for (const site of SITES) {
       const td = document.createElement('td');
-      (TREE[site.slug][role.slug] || []).forEach(node => td.appendChild(renderNode(node, site.slug, role.slug)));
+      const cellNodes = TREE[site.slug][role.slug] || [];
+      cellNodes.forEach(node => td.appendChild(renderNode(node, site.slug, role.slug, cellNodes)));
       td.appendChild(addButtons(null, site.slug, role.slug, refresh));
 
       // soltar en el hueco vacío de la celda (no sobre una tarjeta
@@ -819,12 +859,12 @@ function renderGrid() {
         td.addEventListener('dragover', (e) => {
           if (!draggingNode) return;
           e.preventDefault();
-          td.classList.add('drop-target');
+          td.classList.add('drop-inside');
         });
-        td.addEventListener('dragleave', () => td.classList.remove('drop-target'));
+        td.addEventListener('dragleave', () => td.classList.remove('drop-inside'));
         td.addEventListener('drop', async (e) => {
           e.preventDefault();
-          td.classList.remove('drop-target');
+          td.classList.remove('drop-inside');
           if (!draggingNode) return;
           await performMove({parent_id: null, site: site.slug, role: role.slug});
         });
