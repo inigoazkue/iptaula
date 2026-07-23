@@ -220,7 +220,10 @@
   .modal-section { margin-bottom: 18px; }
   .modal-section h3 { font-size: 0.85rem; color: var(--text-secondary); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.04em; }
   .modal-section-compact { margin-bottom: 10px; }
-  #active-columns-row { align-items: center; margin-top: 6px; }
+  .modal-section-cols { display: flex; gap: 18px; align-items: flex-start; }
+  .modal-col-left, .modal-col-right { flex: 1 1 0; min-width: 0; }
+  .modal-col-left .inline-form, .modal-col-right.inline-form { margin: 0; }
+  #active-columns-row { align-items: center; }
   #active-columns { display: flex; flex-wrap: wrap; gap: 0; }
 
   .col-chip {
@@ -1043,18 +1046,20 @@ async function renderRangeModal(nodeId) {
       </span>
     </div>
 
-    <div class="modal-section modal-section-compact">
-      ${isAdmin() ? `
-        <form class="inline-form" id="range-meta-form">
-          <input name="name" value="${escapeAttr(node.name)}" placeholder="Izena" required>
-          <input name="cidr" value="${escapeAttr(node.cidr)}" placeholder="10.1.2.0/24" required>
-          <input name="description" value="${escapeAttr(node.description || '')}" placeholder="Deskribapena (aukerakoa)">
-          <button type="submit" class="btn-blue">Gorde</button>
-        </form>
-      ` : `
-        <p class="node-desc">${escapeHtml(node.cidr)}${node.description ? ' - ' + escapeHtml(node.description) : ''}</p>
-      `}
-      <div class="inline-form" id="active-columns-row">
+    <div class="modal-section modal-section-compact modal-section-cols">
+      <div class="modal-col-left">
+        ${isAdmin() ? `
+          <form class="inline-form" id="range-meta-form">
+            <input name="name" value="${escapeAttr(node.name)}" placeholder="Izena" required>
+            <input name="cidr" value="${escapeAttr(node.cidr)}" placeholder="10.1.2.0/24" required>
+            <input name="description" value="${escapeAttr(node.description || '')}" placeholder="Deskribapena (aukerakoa)">
+            <button type="submit" class="btn-blue">Gorde</button>
+          </form>
+        ` : `
+          <p class="node-desc">${escapeHtml(node.cidr)}${node.description ? ' - ' + escapeHtml(node.description) : ''}</p>
+        `}
+      </div>
+      <div class="modal-col-right inline-form" id="active-columns-row">
         <div id="active-columns">
           ${(node.columns || []).map(c => `<span class="col-chip">${escapeHtml(c.name)} ${isAdmin() ? `<button data-col="${c.id}" title="Zutabea kendu">×</button>` : ''}</span>`).join('') || '<span class="node-desc">Zutaberik ez.</span>'}
         </div>
