@@ -7,31 +7,52 @@
 <style>
   :root {
     color-scheme: light;
-    --surface-1:      #fcfcfb;
-    --page:           #f9f9f7;
-    --text-primary:   #0b0b0b;
-    --text-secondary: #52514e;
-    --text-muted:     #898781;
-    --gridline:       #e1e0d9;
-    --border:         rgba(11,11,11,0.10);
-    --link:     #2a78d6;
-    --group-bg: #f3f1ec;
+    --page:           #f6f5fb;
+    --surface-1:      #ffffff;
+    --text-primary:   #26243a;
+    --text-secondary: #5c5975;
+    --text-muted:     #8f8ca6;
+    --gridline:       #e7e4f2;
+    --border:         rgba(38,36,58,0.10);
+    --shadow:         0 1px 3px rgba(38,36,58,0.08);
+
+    --rango-bg:    #eaf2fd;
+    --rango-border:#cfe2fa;
+    --group-bg:    #fdf1e4;
+    --group-border:#f3ddc0;
+
+    --btn-blue:     #b7d3f7; --btn-blue-hover: #9cc0f2; --btn-blue-ink: #1d3f66;
+    --btn-green:    #c8ecd3; --btn-green-hover: #aee0bd; --btn-green-ink: #205a34;
+    --btn-pink:     #f8ccd2; --btn-pink-hover: #f3aeb8; --btn-pink-ink: #6e2430;
+    --btn-neutral:  #eceafc; --btn-neutral-hover: #ddd9f7; --btn-neutral-ink: #33314a;
   }
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])) {
       color-scheme: dark;
-      --surface-1: #1a1a19; --page: #0d0d0d;
-      --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #898781;
-      --gridline: #2c2c2a; --border: rgba(255,255,255,0.10);
-      --link: #3987e5; --group-bg: #232322;
+      --page: #17161f; --surface-1: #211f2c;
+      --text-primary: #f1f0f8; --text-secondary: #c2bfd6; --text-muted: #8f8ca6;
+      --gridline: #322f42; --border: rgba(255,255,255,0.10);
+      --shadow: 0 1px 3px rgba(0,0,0,0.4);
+      --rango-bg: #1e2c3f; --rango-border: #2c4562;
+      --group-bg: #362c1f; --group-border: #56412a;
+      --btn-blue: #2c4562; --btn-blue-hover: #395a80; --btn-blue-ink: #cfe2fa;
+      --btn-green: #23402c; --btn-green-hover: #2d5238; --btn-green-ink: #c8ecd3;
+      --btn-pink: #4a2830; --btn-pink-hover: #5e323c; --btn-pink-ink: #f8ccd2;
+      --btn-neutral: #2b2940; --btn-neutral-hover: #38355210; --btn-neutral-ink: #eceafc;
     }
   }
   :root[data-theme="dark"] {
     color-scheme: dark;
-    --surface-1: #1a1a19; --page: #0d0d0d;
-    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #898781;
-    --gridline: #2c2c2a; --border: rgba(255,255,255,0.10);
-    --link: #3987e5; --group-bg: #232322;
+    --page: #17161f; --surface-1: #211f2c;
+    --text-primary: #f1f0f8; --text-secondary: #c2bfd6; --text-muted: #8f8ca6;
+    --gridline: #322f42; --border: rgba(255,255,255,0.10);
+    --shadow: 0 1px 3px rgba(0,0,0,0.4);
+    --rango-bg: #1e2c3f; --rango-border: #2c4562;
+    --group-bg: #362c1f; --group-border: #56412a;
+    --btn-blue: #2c4562; --btn-blue-hover: #395a80; --btn-blue-ink: #cfe2fa;
+    --btn-green: #23402c; --btn-green-hover: #2d5238; --btn-green-ink: #c8ecd3;
+    --btn-pink: #4a2830; --btn-pink-hover: #5e323c; --btn-pink-ink: #f8ccd2;
+    --btn-neutral: #2b2940; --btn-neutral-hover: #383552; --btn-neutral-ink: #eceafc;
   }
 
   * { box-sizing: border-box; }
@@ -40,8 +61,30 @@
     background: var(--page); color: var(--text-primary);
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   }
-  h1 { font-size: 1.4rem; margin: 0 0 4px; }
-  .subtitle { color: var(--text-secondary); margin: 0 0 20px; font-size: 0.9rem; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .subtitle { color: var(--text-secondary); margin: 0 0 16px; font-size: 0.9rem; }
+
+  .topbar { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 18px; flex-wrap: wrap; gap: 10px; }
+
+  button, .btn {
+    font-family: inherit; cursor: pointer; border: none; border-radius: 8px;
+    padding: 6px 12px; font-size: 0.78rem; font-weight: 600;
+    transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+  }
+  button:hover, .btn:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+  .btn-blue    { background: var(--btn-blue); color: var(--btn-blue-ink); }
+  .btn-blue:hover    { background: var(--btn-blue-hover); }
+  .btn-green   { background: var(--btn-green); color: var(--btn-green-ink); }
+  .btn-green:hover   { background: var(--btn-green-hover); }
+  .btn-pink    { background: var(--btn-pink); color: var(--btn-pink-ink); }
+  .btn-pink:hover    { background: var(--btn-pink-hover); }
+  .btn-neutral { background: var(--btn-neutral); color: var(--btn-neutral-ink); }
+  .btn-neutral:hover { background: var(--btn-neutral-hover); }
+  .btn-text {
+    background: none; color: var(--text-secondary); padding: 2px 4px; font-weight: 500;
+    text-decoration: underline; text-decoration-color: transparent;
+  }
+  .btn-text:hover { color: var(--btn-blue-ink); text-decoration-color: currentColor; transform: none; box-shadow: none; }
 
   table { border-collapse: collapse; width: 100%; table-layout: fixed; }
   th, td {
@@ -50,64 +93,92 @@
   }
   th {
     background: var(--surface-1); color: var(--text-secondary);
-    font-weight: 600; text-align: left;
+    font-weight: 700; text-align: left;
   }
   th:first-child { width: 130px; }
 
-  .cell-actions { display: flex; gap: 10px; margin-bottom: 8px; }
-  .add-link {
-    font-size: 0.72rem; color: var(--link); text-decoration: none;
-    background: none; border: none; cursor: pointer; padding: 0;
-  }
-  .add-link:hover { text-decoration: underline; }
+  .cell-actions { display: flex; gap: 8px; margin-bottom: 8px; }
 
   .node {
-    border: 1px solid var(--border); border-radius: 6px;
-    padding: 6px 8px; margin-bottom: 6px; background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 8px 10px; margin-bottom: 8px; background: var(--surface-1);
+    box-shadow: var(--shadow);
   }
-  .node.agrupacion { background: var(--group-bg); border-style: dashed; }
+  .node.rango { background: var(--rango-bg); border-color: var(--rango-border); }
+  .node.agrupacion { background: var(--group-bg); border-color: var(--group-border); border-style: dashed; }
   .node-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
-  .node-name { font-weight: 600; font-size: 0.85rem; cursor: default; }
+  .node-name { font-weight: 700; font-size: 0.88rem; }
   .node.agrupacion > .node-head .node-name { cursor: pointer; }
-  .node-desc { color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 2px; }
+  .node-desc { color: var(--text-secondary); font-size: 0.76rem; display: block; margin-top: 2px; }
   .node-cidr { color: var(--text-secondary); font-size: 0.78rem; font-family: ui-monospace, monospace; margin-top: 3px; }
-  .node-ctrl { display: flex; gap: 6px; white-space: nowrap; }
-  .icon-btn {
-    font-size: 0.68rem; color: var(--text-muted); background: none; border: none;
-    cursor: pointer; padding: 0; text-decoration: none;
+  .node-ctrl { display: flex; gap: 8px; white-space: nowrap; }
+
+  .ip-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .ip-pill {
+    font-size: 0.68rem; padding: 2px 7px; border-radius: 10px;
+    background: var(--surface-1); border: 1px solid var(--border); color: var(--text-secondary);
+    font-family: ui-monospace, monospace;
   }
-  .icon-btn:hover { color: var(--link); }
+
   .node-children { margin: 8px 0 2px 14px; padding-left: 10px; border-left: 2px solid var(--gridline); }
-  .node-add-row { display: flex; gap: 10px; margin-top: 6px; }
+  .node-add-row { display: flex; gap: 8px; margin-top: 6px; }
 
   form.inline-form {
     display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0;
-    padding: 6px; border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-1);
   }
   form.inline-form input {
-    font-size: 0.78rem; padding: 4px 6px; border: 1px solid var(--border);
-    border-radius: 4px; background: var(--surface-1); color: var(--text-primary);
+    font-size: 0.78rem; padding: 5px 7px; border: 1px solid var(--border);
+    border-radius: 6px; background: var(--page); color: var(--text-primary);
   }
   form.inline-form input[name="name"] { flex: 1; min-width: 100px; }
   form.inline-form input[name="cidr"] { width: 130px; }
   form.inline-form input[name="description"] { flex: 2; min-width: 120px; }
-  form.inline-form button {
-    font-size: 0.78rem; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--link);
-    background: var(--link); color: #fff; cursor: pointer;
+  .form-error { color: #c23b4a; font-size: 0.72rem; width: 100%; }
+
+  /* --- modal --- */
+  dialog {
+    border: none; border-radius: 14px; padding: 0; width: min(720px, 92vw);
+    background: var(--surface-1); color: var(--text-primary); box-shadow: 0 12px 40px rgba(0,0,0,0.25);
   }
-  form.inline-form .cancel { border-color: var(--border); background: var(--surface-1); color: var(--text-primary); }
-  .form-error { color: #d03b3b; font-size: 0.72rem; width: 100%; }
+  dialog::backdrop { background: rgba(20,18,30,0.45); }
+  .modal-inner { padding: 20px 22px; max-height: 85vh; overflow-y: auto; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .modal-header h2 { font-size: 1.15rem; margin: 0; }
+  .modal-section { margin-bottom: 18px; }
+  .modal-section h3 { font-size: 0.85rem; color: var(--text-secondary); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .col-chip {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem;
+    background: var(--btn-neutral); color: var(--btn-neutral-ink); padding: 3px 8px;
+    border-radius: 10px; margin: 0 6px 6px 0;
+  }
+  .col-chip button { background: none; padding: 0; color: inherit; font-weight: 700; }
+
+  table.ip-table th, table.ip-table td { font-size: 0.78rem; padding: 6px 8px; }
+  table.ip-table input { width: 100%; font-size: 0.78rem; padding: 4px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--page); color: var(--text-primary); }
+
+  .catalog-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--gridline); font-size: 0.85rem; }
+  .catalog-row:last-child { border-bottom: none; }
 
   #status { color: var(--text-muted); font-size: 0.85rem; }
 </style>
 </head>
 <body>
 
-<h1>IP Taula</h1>
-<p class="subtitle">Sedeen eta sare moten araberako sare-taula (matriz de sedes x tipo de red).</p>
+<div class="topbar">
+  <div>
+    <h1>IP Taula</h1>
+    <p class="subtitle">Sedeen eta sare moten araberako sare-taula.</p>
+  </div>
+  <button class="btn-neutral" id="manage-columns-btn">Zutabeak kudeatu</button>
+</div>
 
 <div id="status">Kargatzen...</div>
 <table id="grid" style="display:none;"></table>
+
+<dialog id="range-modal"><div class="modal-inner" id="range-modal-body"></div></dialog>
+<dialog id="columns-modal"><div class="modal-inner" id="columns-modal-body"></div></dialog>
 
 <script>
 const SITES = [
@@ -124,10 +195,7 @@ const ROLES = [
 ];
 
 async function api(path, opts) {
-  const resp = await fetch(`/api${path}`, {
-    headers: {'Content-Type': 'application/json'},
-    ...opts,
-  });
+  const resp = await fetch(`/api${path}`, {headers: {'Content-Type': 'application/json'}, ...opts});
   if (!resp.ok) {
     const body = await resp.json().catch(() => ({}));
     throw new Error(body.detail || `HTTP ${resp.status}`);
@@ -136,27 +204,34 @@ async function api(path, opts) {
 }
 
 let TREE = null;
+let COLUMNS = [];
 
-async function loadTree() {
-  TREE = await api('/tree');
+async function loadAll() {
+  [TREE, COLUMNS] = await Promise.all([api('/tree'), api('/columns')]);
 }
 
 async function refresh() {
-  await loadTree();
+  await loadAll();
   renderGrid();
 }
+
+function escapeAttr(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+function escapeHtml(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+}
+
+/* ---------- formularios de alta/edición de nodos ---------- */
 
 function addButtons(parentId, site, role, onDone) {
   const wrap = document.createElement('div');
   wrap.className = 'cell-actions';
   const addRango = document.createElement('button');
-  addRango.className = 'add-link';
-  addRango.textContent = '+ rango';
+  addRango.className = 'btn-blue'; addRango.textContent = '+ rango';
   const addGroup = document.createElement('button');
-  addGroup.className = 'add-link';
-  addGroup.textContent = '+ agrupación';
+  addGroup.className = 'btn-neutral'; addGroup.textContent = '+ agrupación';
   wrap.append(addRango, addGroup);
-
   addRango.addEventListener('click', () => wrap.replaceWith(buildForm('rango', parentId, site, role, onDone, () => wrap)));
   addGroup.addEventListener('click', () => wrap.replaceWith(buildForm('agrupacion', parentId, site, role, onDone, () => wrap)));
   return wrap;
@@ -169,8 +244,8 @@ function buildForm(nodeType, parentId, site, role, onDone, getOriginal) {
     <input name="name" placeholder="Nombre" required>
     ${nodeType === 'rango' ? '<input name="cidr" placeholder="10.1.2.0/24" required>' : ''}
     <input name="description" placeholder="Descripción (opcional)">
-    <button type="submit">Guardar</button>
-    <button type="button" class="cancel">Cancelar</button>
+    <button type="submit" class="btn-blue">Guardar</button>
+    <button type="button" class="btn-neutral cancel">Cancelar</button>
   `;
   form.querySelector('.cancel').addEventListener('click', () => form.replaceWith(getOriginal()));
   form.addEventListener('submit', async (e) => {
@@ -192,8 +267,7 @@ function buildForm(nodeType, parentId, site, role, onDone, getOriginal) {
       await onDone();
     } catch (err) {
       const p = document.createElement('div');
-      p.className = 'form-error';
-      p.textContent = err.message;
+      p.className = 'form-error'; p.textContent = err.message;
       form.appendChild(p);
     }
   });
@@ -205,10 +279,9 @@ function buildEditForm(node, onDone) {
   form.className = 'inline-form';
   form.innerHTML = `
     <input name="name" value="${escapeAttr(node.name)}" required>
-    ${node.node_type === 'rango' ? `<input name="cidr" value="${escapeAttr(node.cidr || '')}" required>` : ''}
     <input name="description" value="${escapeAttr(node.description || '')}" placeholder="Descripción (opcional)">
-    <button type="submit">Guardar</button>
-    <button type="button" class="cancel">Cancelar</button>
+    <button type="submit" class="btn-blue">Guardar</button>
+    <button type="button" class="btn-neutral cancel">Cancelar</button>
   `;
   form.querySelector('.cancel').addEventListener('click', () => onDone(false));
   form.addEventListener('submit', async (e) => {
@@ -217,48 +290,60 @@ function buildEditForm(node, onDone) {
     try {
       await api(`/nodes/${node.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({
-          name: form.name.value,
-          description: form.description.value || null,
-          cidr: node.node_type === 'rango' ? form.cidr.value : null,
-        }),
+        body: JSON.stringify({name: form.name.value, description: form.description.value || null}),
       });
       await onDone(true);
     } catch (err) {
       const p = document.createElement('div');
-      p.className = 'form-error';
-      p.textContent = err.message;
+      p.className = 'form-error'; p.textContent = err.message;
       form.appendChild(p);
     }
   });
   return form;
 }
 
-function escapeAttr(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-}
-
 function countDescendants(node) {
   return node.children.reduce((acc, c) => acc + 1 + countDescendants(c), 0);
 }
+
+async function deleteNode(node) {
+  const n = countDescendants(node);
+  const msg = n > 0 ? `"${node.name}" contiene ${n} elemento(s) dentro. ¿Borrar todo?` : `¿Borrar "${node.name}"?`;
+  if (!confirm(msg)) return;
+  await api(`/nodes/${node.id}`, {method: 'DELETE'});
+  await refresh();
+}
+
+/* ---------- tarjeta de nodo en la matriz ---------- */
 
 function renderNode(node, site, role) {
   const el = document.createElement('div');
   el.className = `node ${node.node_type}`;
 
   const body = document.createElement('div');
+  const pills = (node.ip_entries || []).map(e => {
+    const firstVal = node.columns && node.columns[0] ? e.values[String(node.columns[0].id)] : null;
+    return `<span class="ip-pill">${e.ip}${firstVal ? ' · ' + escapeHtml(firstVal) : ''}</span>`;
+  }).join('');
+
   body.innerHTML = `
     <div class="node-head">
-      <span class="node-name">${node.name}</span>
+      <span class="node-name">${escapeHtml(node.name)}</span>
       <span class="node-ctrl">
-        <button class="icon-btn" data-action="edit">editar</button>
-        <button class="icon-btn" data-action="delete">borrar</button>
+        ${node.node_type === 'rango' ? '<button class="btn-text" data-action="open">ver / editar</button>' : ''}
+        ${node.node_type === 'agrupacion' ? '<button class="btn-text" data-action="edit">editar</button>' : ''}
+        <button class="btn-text" data-action="delete">borrar</button>
       </span>
     </div>
-    ${node.description ? `<span class="node-desc">${node.description}</span>` : ''}
+    ${node.description ? `<span class="node-desc">${escapeHtml(node.description)}</span>` : ''}
     ${node.node_type === 'rango' ? `<span class="node-cidr">${node.cidr}</span>` : ''}
+    ${node.node_type === 'rango' && pills ? `<div class="ip-pills">${pills}</div>` : ''}
   `;
   el.appendChild(body);
+
+  if (node.node_type === 'rango') {
+    body.querySelector('[data-action="open"]').addEventListener('click', () => openRangeModal(node.id));
+  }
 
   let childrenBox = null;
   if (node.node_type === 'agrupacion') {
@@ -275,25 +360,16 @@ function renderNode(node, site, role) {
     body.querySelector('.node-name').addEventListener('click', () => {
       childrenBox.style.display = childrenBox.style.display === 'none' ? 'block' : 'none';
     });
+    body.querySelector('[data-action="edit"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const form = buildEditForm(node, async (changed) => { changed ? await refresh() : form.replaceWith(body); });
+      body.replaceWith(form);
+    });
   }
 
-  body.querySelector('[data-action="edit"]').addEventListener('click', (e) => {
+  body.querySelector('[data-action="delete"]').addEventListener('click', (e) => {
     e.stopPropagation();
-    const form = buildEditForm(node, async (changed) => {
-      if (changed) { await refresh(); } else { form.replaceWith(body); }
-    });
-    body.replaceWith(form);
-  });
-
-  body.querySelector('[data-action="delete"]').addEventListener('click', async (e) => {
-    e.stopPropagation();
-    const n = countDescendants(node);
-    const msg = n > 0
-      ? `"${node.name}" contiene ${n} elemento(s) dentro. ¿Borrar todo?`
-      : `¿Borrar "${node.name}"?`;
-    if (!confirm(msg)) return;
-    await api(`/nodes/${node.id}`, {method: 'DELETE'});
-    await refresh();
+    deleteNode(node);
   });
 
   return el;
@@ -306,22 +382,16 @@ function renderGrid() {
   const thead = document.createElement('tr');
   thead.appendChild(document.createElement('th'));
   for (const site of SITES) {
-    const th = document.createElement('th');
-    th.textContent = site.label;
-    thead.appendChild(th);
+    const th = document.createElement('th'); th.textContent = site.label; thead.appendChild(th);
   }
   table.appendChild(thead);
 
   for (const role of ROLES) {
     const tr = document.createElement('tr');
-    const th = document.createElement('th');
-    th.textContent = role.label;
-    tr.appendChild(th);
-
+    const th = document.createElement('th'); th.textContent = role.label; tr.appendChild(th);
     for (const site of SITES) {
       const td = document.createElement('td');
-      const nodes = TREE[site.slug][role.slug];
-      nodes.forEach(node => td.appendChild(renderNode(node, site.slug, role.slug)));
+      TREE[site.slug][role.slug].forEach(node => td.appendChild(renderNode(node, site.slug, role.slug)));
       td.appendChild(addButtons(null, site.slug, role.slug, refresh));
       tr.appendChild(td);
     }
@@ -331,6 +401,235 @@ function renderGrid() {
   document.getElementById('status').style.display = 'none';
   table.style.display = 'table';
 }
+
+/* ---------- modal de rango: metadatos + columnas + tabla de IPs ---------- */
+
+function findNodeById(id, nodes) {
+  for (const n of nodes) {
+    if (n.id === id) return n;
+    const found = findNodeById(id, n.children);
+    if (found) return found;
+  }
+  return null;
+}
+
+function allTopNodes() {
+  const acc = [];
+  for (const site of SITES) for (const role of ROLES) acc.push(...TREE[site.slug][role.slug]);
+  return acc;
+}
+
+async function openRangeModal(nodeId) {
+  const modal = document.getElementById('range-modal');
+  await renderRangeModal(nodeId);
+  modal.showModal();
+}
+
+async function renderRangeModal(nodeId) {
+  const node = findNodeById(nodeId, allTopNodes());
+  const body = document.getElementById('range-modal-body');
+  const activeIds = new Set((node.columns || []).map(c => c.id));
+  const availableCols = COLUMNS.filter(c => !activeIds.has(c.id));
+
+  body.innerHTML = `
+    <div class="modal-header">
+      <h2>${escapeHtml(node.name)}</h2>
+      <button class="btn-neutral" id="close-range-modal">Cerrar</button>
+    </div>
+
+    <div class="modal-section">
+      <h3>Datos del rango</h3>
+      <form class="inline-form" id="range-meta-form">
+        <input name="name" value="${escapeAttr(node.name)}" placeholder="Nombre" required>
+        <input name="cidr" value="${escapeAttr(node.cidr)}" placeholder="10.1.2.0/24" required>
+        <input name="description" value="${escapeAttr(node.description || '')}" placeholder="Descripción (opcional)">
+        <button type="submit" class="btn-blue">Guardar</button>
+      </form>
+    </div>
+
+    <div class="modal-section">
+      <h3>Columnas activas</h3>
+      <div id="active-columns">
+        ${(node.columns || []).map(c => `<span class="col-chip">${escapeHtml(c.name)} <button data-col="${c.id}" title="Quitar columna">×</button></span>`).join('') || '<span class="node-desc">Ninguna todavía.</span>'}
+      </div>
+      <form class="inline-form" id="add-column-form">
+        <select name="column_id" ${availableCols.length ? '' : 'disabled'}>
+          ${availableCols.length ? availableCols.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('') : '<option>No hay más columnas en el catálogo</option>'}
+        </select>
+        <button type="submit" class="btn-green" ${availableCols.length ? '' : 'disabled'}>+ Añadir al rango</button>
+        <button type="button" class="btn-text" id="open-columns-catalog">Gestionar columnas...</button>
+      </form>
+    </div>
+
+    <div class="modal-section">
+      <h3>IPs en uso</h3>
+      <div id="ip-table-wrap"></div>
+      <form class="inline-form" id="add-ip-form">
+        <input name="ip" placeholder="IP" required>
+        ${(node.columns || []).map(c => `<input name="col_${c.id}" placeholder="${escapeAttr(c.name)}">`).join('')}
+        <button type="submit" class="btn-green">+ Añadir IP</button>
+      </form>
+      <div class="form-error" id="ip-form-error"></div>
+    </div>
+  `;
+
+  renderIpTable(node);
+
+  document.getElementById('close-range-modal').addEventListener('click', () => document.getElementById('range-modal').close());
+
+  document.getElementById('range-meta-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    try {
+      await api(`/nodes/${node.id}`, {method: 'PATCH', body: JSON.stringify({
+        name: f.name.value, cidr: f.cidr.value, description: f.description.value || null,
+      })});
+      await refresh();
+      await renderRangeModal(nodeId);
+    } catch (err) { alert(err.message); }
+  });
+
+  document.getElementById('add-column-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const colId = e.target.column_id.value;
+    if (!colId) return;
+    await api(`/nodes/${node.id}/columns`, {method: 'POST', body: JSON.stringify({column_id: Number(colId)})});
+    await refresh();
+    await renderRangeModal(nodeId);
+  });
+
+  body.querySelectorAll('#active-columns button').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('¿Quitar esta columna del rango? Se perderán sus valores en este rango.')) return;
+      await api(`/nodes/${node.id}/columns/${btn.dataset.col}`, {method: 'DELETE'});
+      await refresh();
+      await renderRangeModal(nodeId);
+    });
+  });
+
+  document.getElementById('open-columns-catalog').addEventListener('click', () => openColumnsModal(nodeId));
+
+  document.getElementById('add-ip-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const values = {};
+    (node.columns || []).forEach(c => { values[c.id] = f[`col_${c.id}`].value || null; });
+    document.getElementById('ip-form-error').textContent = '';
+    try {
+      await api(`/nodes/${node.id}/ips`, {method: 'POST', body: JSON.stringify({ip: f.ip.value, values})});
+      await refresh();
+      await renderRangeModal(nodeId);
+    } catch (err) {
+      document.getElementById('ip-form-error').textContent = err.message;
+    }
+  });
+}
+
+function renderIpTable(node) {
+  const wrap = document.getElementById('ip-table-wrap');
+  const cols = node.columns || [];
+  const entries = node.ip_entries || [];
+  if (!entries.length) {
+    wrap.innerHTML = '<span class="node-desc">Sin IPs registradas todavía.</span>';
+    return;
+  }
+  const table = document.createElement('table');
+  table.className = 'ip-table';
+  table.innerHTML = `
+    <tr><th>IP</th>${cols.map(c => `<th>${escapeHtml(c.name)}</th>`).join('')}<th></th></tr>
+    ${entries.map(e => `
+      <tr data-entry="${e.id}">
+        <td>${e.ip}</td>
+        ${cols.map(c => `<td data-col="${c.id}">${escapeHtml(e.values[String(c.id)] || '')}</td>`).join('')}
+        <td><button class="btn-text" data-action="edit-ip">editar</button> <button class="btn-text" data-action="delete-ip">borrar</button></td>
+      </tr>
+    `).join('')}
+  `;
+  wrap.innerHTML = '';
+  wrap.appendChild(table);
+
+  table.querySelectorAll('[data-action="delete-ip"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const tr = btn.closest('tr');
+      if (!confirm(`¿Borrar la IP ${tr.children[0].textContent}?`)) return;
+      await api(`/ips/${tr.dataset.entry}`, {method: 'DELETE'});
+      await refresh();
+      await renderRangeModal(node.id);
+    });
+  });
+
+  table.querySelectorAll('[data-action="edit-ip"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tr = btn.closest('tr');
+      const entryId = tr.dataset.entry;
+      const entry = entries.find(e => String(e.id) === entryId);
+      tr.children[0].innerHTML = `<input value="${escapeAttr(entry.ip)}" name="ip">`;
+      cols.forEach(c => {
+        const cell = tr.querySelector(`td[data-col="${c.id}"]`);
+        cell.innerHTML = `<input value="${escapeAttr(entry.values[String(c.id)] || '')}" name="col_${c.id}">`;
+      });
+      tr.children[tr.children.length - 1].innerHTML = '<button class="btn-blue" data-action="save-ip">Guardar</button>';
+      tr.querySelector('[data-action="save-ip"]').addEventListener('click', async () => {
+        const values = {};
+        cols.forEach(c => { values[c.id] = tr.querySelector(`input[name="col_${c.id}"]`).value || null; });
+        try {
+          await api(`/ips/${entryId}`, {method: 'PATCH', body: JSON.stringify({ip: tr.querySelector('input[name="ip"]').value, values})});
+          await refresh();
+          await renderRangeModal(node.id);
+        } catch (err) { alert(err.message); }
+      });
+    });
+  });
+}
+
+/* ---------- modal de gestión de columnas (catálogo global) ---------- */
+
+async function openColumnsModal() {
+  await renderColumnsModal();
+  document.getElementById('columns-modal').showModal();
+}
+
+async function renderColumnsModal() {
+  const body = document.getElementById('columns-modal-body');
+  body.innerHTML = `
+    <div class="modal-header">
+      <h2>Zutabeak kudeatu</h2>
+      <button class="btn-neutral" id="close-columns-modal">Cerrar</button>
+    </div>
+    <div id="catalog-list">
+      ${COLUMNS.map(c => `<div class="catalog-row"><span>${escapeHtml(c.name)}</span><button class="btn-text" data-col="${c.id}">borrar</button></div>`).join('') || '<span class="node-desc">Sin columnas todavía.</span>'}
+    </div>
+    <form class="inline-form" id="new-column-form" style="margin-top:12px;">
+      <input name="name" placeholder="Nombre de la columna (p.ej. Hostname, MAC...)" required>
+      <button type="submit" class="btn-green">+ Crear columna</button>
+    </form>
+    <div class="form-error" id="col-form-error"></div>
+  `;
+  document.getElementById('close-columns-modal').addEventListener('click', () => document.getElementById('columns-modal').close());
+
+  body.querySelectorAll('#catalog-list button[data-col]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('¿Borrar esta columna del catálogo? Se quitará de todos los rangos que la usen.')) return;
+      await api(`/columns/${btn.dataset.col}`, {method: 'DELETE'});
+      await refresh();
+      await renderColumnsModal();
+    });
+  });
+
+  document.getElementById('new-column-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    document.getElementById('col-form-error').textContent = '';
+    try {
+      await api('/columns', {method: 'POST', body: JSON.stringify({name: e.target.name.value})});
+      await refresh();
+      await renderColumnsModal();
+    } catch (err) {
+      document.getElementById('col-form-error').textContent = err.message;
+    }
+  });
+}
+
+document.getElementById('manage-columns-btn').addEventListener('click', () => openColumnsModal());
 
 refresh().catch(err => {
   document.getElementById('status').textContent = `Errorea: ${err.message}`;
