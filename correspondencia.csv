@@ -1,3 +1,7 @@
 url_antiguo,nombre_nuevo,site,role,grupo_padre,cidr,columnas,node_id,estado
 IPs_10_217_157.htm,Bilbao General,bilbo,gestioa,,10.217.157.0/24,EQUIPO=Hostname,6,cargado
 IPs_10_214_154.htm,Bilbao INGPROD,bilbo,gestioa,,10.214.154.0/24,"EQUIPO=Hostname; WHO=Erabiltzailea",14,cargado
+IPs_10_114_159.htm,Virtualizazioa / Elkartrukeak,bilbo,gestioa,Sistema Virtual,10.114.159.0/24,"IP=Hostname; IP Contenidos=texto; MAC Address=Oharrak",16,"cargado, con pendientes (ver notas)"
+IPs_10_114_159.htm,Garapeneko ekipo fisikoak,bilbo,gestioa,Sistema Virtual,10.217.159.0/24,IP=Hostname,17,cargado
+IPs_10_114_159.htm,IBM babeskopia kabina,bilbo,gestioa,Sistema Virtual,10.110.80.0/24,IP=Hostname,18,cargado
+IPs_10_114_159.htm,Web switch/ostalariak,bilbo,gestioa,Sistema Virtual,10.119.80.0/24,IP=Hostname,19,cargado
