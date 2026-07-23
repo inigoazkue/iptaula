@@ -21,6 +21,7 @@ import json
 import os
 import re
 import secrets
+import socket
 import sqlite3
 import subprocess
 import unicodedata
@@ -81,6 +82,7 @@ CREATE TABLE IF NOT EXISTS columns_catalog (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
     is_ip INTEGER NOT NULL DEFAULT 0,
+    is_hostname INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -223,6 +225,8 @@ def migrate_schema(conn):
     col_cols = [r["name"] for r in conn.execute("PRAGMA table_info(columns_catalog)")]
     if col_cols and "is_ip" not in col_cols:
         conn.execute("ALTER TABLE columns_catalog ADD COLUMN is_ip INTEGER NOT NULL DEFAULT 0")
+    if col_cols and "is_hostname" not in col_cols:
+        conn.execute("ALTER TABLE columns_catalog ADD COLUMN is_hostname INTEGER NOT NULL DEFAULT 0")
 
 
 def init_db():
@@ -299,6 +303,7 @@ class MoveIn(BaseModel):
 class ColumnIn(BaseModel):
     name: str
     is_ip: bool = False
+    is_hostname: bool = False
 
 
 class RangeColumnIn(BaseModel):
@@ -494,6 +499,23 @@ def ping_ip(ip: str, _auth=Depends(require_auth)):
     return {"ok_count": ok_count, "rejected": rejected, "detail": output[-1000:]}
 
 
+@app.get("/api/resolve/{ip}")
+def resolve_ip(ip: str, _auth=Depends(require_auth)):
+    try:
+        ip_address(ip)
+    except ValueError:
+        raise HTTPException(400, "IP baliogabea")
+    old_timeout = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(5)
+    try:
+        hostname, _, _ = socket.gethostbyaddr(ip)
+        return {"found": True, "hostname": hostname}
+    except (socket.herror, socket.gaierror, socket.timeout, OSError):
+        return {"found": False, "hostname": None}
+    finally:
+        socket.setdefaulttimeout(old_timeout)
+
+
 # --- árbol completo (sedes, roles y nodos con sus IPs/columnas) ---
 
 @app.get("/api/tree")
@@ -505,12 +527,14 @@ def get_tree():
 
         columns_by_node = {}
         for rc in conn.execute(
-            "SELECT rc.node_id AS node_id, c.id AS column_id, c.name AS name, c.is_ip AS is_ip "
+            "SELECT rc.node_id AS node_id, c.id AS column_id, c.name AS name, "
+            "c.is_ip AS is_ip, c.is_hostname AS is_hostname "
             "FROM range_columns rc JOIN columns_catalog c ON c.id = rc.column_id "
             "ORDER BY c.name"
         ):
             columns_by_node.setdefault(rc["node_id"], []).append(
-                {"id": rc["column_id"], "name": rc["name"], "is_ip": bool(rc["is_ip"])}
+                {"id": rc["column_id"], "name": rc["name"],
+                 "is_ip": bool(rc["is_ip"]), "is_hostname": bool(rc["is_hostname"])}
             )
 
         values_by_entry = {}
@@ -758,9 +782,10 @@ def create_column(col: ColumnIn, _auth=Depends(require_admin)):
         if conn.execute("SELECT id FROM columns_catalog WHERE name=?", (name,)).fetchone():
             raise HTTPException(409, "Badago izen hori duen zutabe bat jada")
         cur = conn.execute(
-            "INSERT INTO columns_catalog (name, is_ip) VALUES (?, ?)", (name, int(col.is_ip))
+            "INSERT INTO columns_catalog (name, is_ip, is_hostname) VALUES (?, ?, ?)",
+            (name, int(col.is_ip), int(col.is_hostname)),
         )
-        return {"id": cur.lastrowid, "name": name, "is_ip": col.is_ip}
+        return {"id": cur.lastrowid, "name": name, "is_ip": col.is_ip, "is_hostname": col.is_hostname}
 
 
 @app.delete("/api/columns/{column_id}")
