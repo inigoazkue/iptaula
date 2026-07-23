@@ -49,6 +49,14 @@ services:
       - netbox-redis-cache-data:/data
     restart: unless-stopped
 
+  dashboard:
+    image: nginx:alpine
+    volumes:
+      - ./dashboard:/usr/share/nginx/html:ro
+    ports:
+      - "8081:80"
+    restart: unless-stopped
+
 volumes:
   netbox-media-files:
   netbox-reports-files:

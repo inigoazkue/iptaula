@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapa de redes EITB</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --border:         rgba(11,11,11,0.10);
+    --good:     #0ca30c;
+    --warning:  #fab219;
+    --critical: #d03b3b;
+    --link:     #2a78d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface-1: #1a1a19; --page: #0d0d0d;
+      --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #898781;
+      --gridline: #2c2c2a; --border: rgba(255,255,255,0.10);
+      --good: #0ca30c; --warning: #fab219; --critical: #e66767; --link: #3987e5;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-1: #1a1a19; --page: #0d0d0d;
+    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #898781;
+    --gridline: #2c2c2a; --border: rgba(255,255,255,0.10);
+    --good: #0ca30c; --warning: #fab219; --critical: #e66767; --link: #3987e5;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    background: var(--page); color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--text-secondary); margin: 0 0 20px; font-size: 0.9rem; }
+
+  .toolbar {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  #search {
+    flex: 1; min-width: 240px; padding: 8px 12px;
+    border: 1px solid var(--border); border-radius: 6px;
+    background: var(--surface-1); color: var(--text-primary); font-size: 0.9rem;
+  }
+  .btn {
+    padding: 8px 14px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface-1); color: var(--text-primary);
+    text-decoration: none; font-size: 0.85rem; white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--link); }
+
+  .legend { display: flex; gap: 16px; margin-bottom: 20px; font-size: 0.8rem; color: var(--text-secondary); flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+  table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+  th, td {
+    border: 1px solid var(--gridline); vertical-align: top;
+    padding: 10px; font-size: 0.85rem;
+  }
+  th {
+    background: var(--surface-1); color: var(--text-secondary);
+    font-weight: 600; text-align: left; position: sticky; top: 0;
+  }
+  th:first-child { width: 130px; }
+
+  .cell-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .add-link { font-size: 0.75rem; color: var(--link); text-decoration: none; }
+  .add-link:hover { text-decoration: underline; }
+
+  .prefix-chip {
+    display: block; padding: 6px 8px; margin-bottom: 6px;
+    border: 1px solid var(--border); border-radius: 6px;
+    text-decoration: none; color: var(--text-primary);
+    background: var(--surface-1);
+  }
+  .prefix-chip:hover { border-color: var(--link); }
+  .prefix-cidr { font-weight: 600; font-size: 0.85rem; }
+  .prefix-desc { color: var(--text-muted); font-size: 0.75rem; display: block; margin: 2px 0 4px; }
+  .bar-track { height: 6px; border-radius: 3px; background: var(--gridline); overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; }
+  .prefix-stats { font-size: 0.72rem; color: var(--text-secondary); margin-top: 3px; display: flex; justify-content: space-between; }
+
+  .empty-cell { color: var(--text-muted); font-size: 0.78rem; }
+  #status { color: var(--text-muted); font-size: 0.85rem; margin: 8px 0; }
+  #calrec-note {
+    margin-top: 20px; padding: 10px 14px; border-radius: 6px;
+    border: 1px dashed var(--border); color: var(--text-muted); font-size: 0.8rem;
+  }
+</style>
+</head>
+<body>
+
+<h1>Mapa de redes EITB</h1>
+<p class="subtitle">Vista en vivo contra NetBox. Haz clic en una subred para ver/editar sus IPs; usa "+ nueva subred" para dar de alta un rango.</p>
+
+<div class="toolbar">
+  <input id="search" type="text" placeholder="Buscar IP, hostname o subred...">
+  <a class="btn" id="netbox-link" href="#" target="_blank">Abrir NetBox completo</a>
+</div>
+
+<div class="legend">
+  <span class="legend-item"><span class="swatch" style="background:var(--good)"></span> &lt; 70% usado (hay hueco)</span>
+  <span class="legend-item"><span class="swatch" style="background:var(--warning)"></span> 70-90% usado</span>
+  <span class="legend-item"><span class="swatch" style="background:var(--critical)"></span> &gt; 90% usado (casi lleno)</span>
+</div>
+
+<div id="status">Cargando datos de NetBox...</div>
+<div id="search-results" style="display:none; margin-bottom:16px;"></div>
+<table id="grid" style="display:none;"></table>
+
+<div id="calrec-note">
+  Las redes AoIP de Irratia/Calrec (VRF <code>AOIP-CALREC</code>) no se muestran todavía aquí a propósito —
+  quedan pendientes de revisión (ver conversación sobre las tablas de rango completo generadas). Siguen
+  disponibles directamente en NetBox.
+</div>
+
+<script>
+const NETBOX_BASE = `${location.protocol}//${location.hostname}:8080`;
+document.getElementById('netbox-link').href = NETBOX_BASE;
+
+const ROLE_ORDER = ['gestion', 'contenidos', 'privada', 'radios'];
+const ROLE_LABELS = {gestion: 'Gestión', contenidos: 'Contenidos', privada: 'Privada', radios: 'Radios'};
+const SITE_ORDER = ['bilbao', 'miramon', 'gasteiz', 'madrid', 'iruna', '__shared__'];
+const SITE_LABELS = {bilbao: 'Bilbao', miramon: 'Miramón', gasteiz: 'Gasteiz', madrid: 'Madrid', iruna: 'Iruña', __shared__: 'Compartida / backbone'};
+
+async function fetchAllPages(url) {
+  let results = [];
+  let next = url;
+  while (next) {
+    const resp = await fetch(next);
+    if (!resp.ok) throw new Error(`${next} -> HTTP ${resp.status}`);
+    const data = await resp.json();
+    results = results.concat(data.results);
+    next = data.next;
+  }
+  return results;
+}
+
+function statusColor(pct) {
+  if (pct >= 90) return 'var(--critical)';
+  if (pct >= 70) return 'var(--warning)';
+  return 'var(--good)';
+}
+
+function hostsInPrefix(cidr) {
+  const len = parseInt(cidr.split('/')[1], 10);
+  const bits = 32 - len;
+  return bits <= 1 ? Math.pow(2, bits) : Math.pow(2, bits) - 2;
+}
+
+async function utilizationOf(prefix) {
+  const params = new URLSearchParams({parent: prefix.prefix, limit: '1'});
+  params.set('vrf_id', prefix.vrf ? prefix.vrf.id : 'null');
+  const resp = await fetch(`${NETBOX_BASE}/api/ipam/ip-addresses/?${params}`);
+  if (!resp.ok) return {used: 0, total: hostsInPrefix(prefix.prefix)};
+  const data = await resp.json();
+  return {used: data.count, total: hostsInPrefix(prefix.prefix)};
+}
+
+function addPrefixLink(site, role) {
+  const params = new URLSearchParams();
+  if (site) params.set('site', site.id);
+  if (role) params.set('role', role.id);
+  return `${NETBOX_BASE}/ipam/prefixes/add/?${params}`;
+}
+
+function prefixChip(prefix, util) {
+  const pct = util.total ? Math.round((util.used / util.total) * 100) : 0;
+  const color = statusColor(pct);
+  const a = document.createElement('a');
+  a.className = 'prefix-chip';
+  a.href = `${NETBOX_BASE}/ipam/prefixes/${prefix.id}/`;
+  a.target = '_blank';
+  a.innerHTML = `
+    <span class="prefix-cidr">${prefix.prefix}</span>
+    ${prefix.description ? `<span class="prefix-desc">${prefix.description}</span>` : ''}
+    <div class="bar-track"><div class="bar-fill" style="width:${Math.min(pct,100)}%; background:${color}"></div></div>
+    <div class="prefix-stats"><span>${util.used} / ${util.total} usadas</span><span>${pct}%</span></div>
+  `;
+  return a;
+}
+
+function siteKeyOf(prefix) {
+  return prefix.site ? prefix.site.slug : '__shared__';
+}
+
+async function main() {
+  const statusEl = document.getElementById('status');
+  const sites = await fetchAllPages(`${NETBOX_BASE}/api/dcim/sites/?limit=50`);
+  const siteById = Object.fromEntries(sites.map(s => [s.id, s]));
+
+  const roles = await fetchAllPages(`${NETBOX_BASE}/api/ipam/roles/?limit=50`);
+  const roleById = Object.fromEntries(roles.map(r => [r.id, r]));
+  const roleBySlug = Object.fromEntries(roles.map(r => [r.slug, r]));
+  const siteBySlug = Object.fromEntries(sites.map(s => [s.slug, s]));
+
+  let prefixes = await fetchAllPages(`${NETBOX_BASE}/api/ipam/prefixes/?limit=200`);
+  prefixes = prefixes.filter(p => !p.vrf || p.vrf.name !== 'AOIP-CALREC');
+
+  statusEl.textContent = `Calculando ocupación de ${prefixes.length} subredes...`;
+
+  const withUtil = [];
+  for (const p of prefixes) {
+    withUtil.push({prefix: p, util: await utilizationOf(p)});
+  }
+
+  const grid = {};
+  for (const {prefix, util} of withUtil) {
+    const roleSlug = prefix.role ? prefix.role.slug : 'sin-rol';
+    const siteKey = siteKeyOf(prefix);
+    grid[roleSlug] = grid[roleSlug] || {};
+    grid[roleSlug][siteKey] = grid[roleSlug][siteKey] || [];
+    grid[roleSlug][siteKey].push({prefix, util});
+  }
+
+  const table = document.getElementById('grid');
+  const thead = document.createElement('tr');
+  thead.appendChild(document.createElement('th'));
+  for (const siteKey of SITE_ORDER) {
+    const th = document.createElement('th');
+    th.textContent = SITE_LABELS[siteKey];
+    thead.appendChild(th);
+  }
+  table.appendChild(thead);
+
+  for (const roleSlug of ROLE_ORDER) {
+    const tr = document.createElement('tr');
+    const th = document.createElement('th');
+    th.textContent = ROLE_LABELS[roleSlug];
+    tr.appendChild(th);
+
+    for (const siteKey of SITE_ORDER) {
+      const td = document.createElement('td');
+      const head = document.createElement('div');
+      head.className = 'cell-head';
+      const addA = document.createElement('a');
+      addA.className = 'add-link';
+      addA.textContent = '+ nueva subred';
+      addA.target = '_blank';
+      addA.href = addPrefixLink(siteKey === '__shared__' ? null : siteBySlug[siteKey], roleBySlug[roleSlug]);
+      head.appendChild(addA);
+      td.appendChild(head);
+
+      const items = (grid[roleSlug] && grid[roleSlug][siteKey]) || [];
+      if (items.length === 0) {
+        const span = document.createElement('span');
+        span.className = 'empty-cell';
+        span.textContent = '— sin subredes —';
+        td.appendChild(span);
+      } else {
+        for (const {prefix, util} of items) {
+          td.appendChild(prefixChip(prefix, util));
+        }
+      }
+      tr.appendChild(td);
+    }
+    table.appendChild(tr);
+  }
+
+  statusEl.style.display = 'none';
+  table.style.display = 'table';
+}
+
+async function doSearch(term) {
+  const resultsEl = document.getElementById('search-results');
+  const gridEl = document.getElementById('grid');
+  if (!term) {
+    resultsEl.style.display = 'none';
+    gridEl.style.display = 'table';
+    return;
+  }
+  const [ips, prefixes] = await Promise.all([
+    fetch(`${NETBOX_BASE}/api/ipam/ip-addresses/?q=${encodeURIComponent(term)}&limit=25`).then(r => r.json()),
+    fetch(`${NETBOX_BASE}/api/ipam/prefixes/?q=${encodeURIComponent(term)}&limit=25`).then(r => r.json()),
+  ]);
+  gridEl.style.display = 'none';
+  resultsEl.style.display = 'block';
+  const rows = [
+    ...prefixes.results.map(p => `<div class="prefix-chip" style="display:block"><a href="${NETBOX_BASE}/ipam/prefixes/${p.id}/" target="_blank"><b>${p.prefix}</b> - ${p.description || 'subred'}</a></div>`),
+    ...ips.results.map(ip => `<div class="prefix-chip" style="display:block"><a href="${NETBOX_BASE}/ipam/ip-addresses/${ip.id}/" target="_blank"><b>${ip.address}</b> - ${ip.dns_name || ip.description || ''}</a></div>`),
+  ];
+  resultsEl.innerHTML = rows.length ? rows.join('') : '<p class="empty-cell">Sin resultados.</p>';
+}
+
+let searchTimer;
+document.getElementById('search').addEventListener('input', (e) => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => doSearch(e.target.value.trim()), 300);
+});
+
+main().catch(err => {
+  document.getElementById('status').textContent = `Error cargando NetBox: ${err.message}`;
+});
+</script>
+</body>
+</html>
