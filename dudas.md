@@ -35,3 +35,9 @@ Página muy grande (685 filas, ~19 subredes distintas dentro de un único docume
 7. **Nombres sin subred declarada explícitamente en el documento** (se les puso un nombre descriptivo propio, a falta de uno mejor — se pueden renombrar libremente desde la interfaz si no encajan): `10.114.10.x`, `Isilon` (10.114.9.x), `Birtualizazioa (OLVM/oVirt)` (10.114.155.x), `Esplotazioa` (10.114.154.x), `Garapena eta DMZ` (10.114.150.x), `Ekoizpen nagusia` (10.114.157.x), `Biltegiratzea eta DMZ` (10.114.158.x), `ESRS Dell EMC` (10.114.70.x, un único dispositivo).
 
 8. **Nota huérfana sin IP**: al final del documento aparece una fila suelta con el texto "IBM 3550 m3" sin ninguna IP asociada. No se ha cargado en ningún sitio por no poder relacionarla con un host concreto.
+
+## bilbao_10_114_11.htm → rango "Switch-ak / sareko ekipamendua" (dentro de "Sistema Virtual", Bilbo/Gestioa)
+
+Página sencilla, una sola subred (10.114.11.0/24, 113 entradas cargadas). A petición del usuario, la columna "Ping" del documento original no se cargó (no se sabía qué representaba).
+
+1. **IP duplicada `10.114.11.118`**: dos nombres distintos, `HOUSE MONITORING` (con nota "FLOW 3") y `MAM`. Se cargó `HOUSE MONITORING` como nombre principal y se anotó en Oharrak que `MAM` comparte la misma IP. **Pendiente de confirmar cuál de los dos sigue en uso.**
