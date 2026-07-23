@@ -176,14 +176,14 @@ app = FastAPI(title="IP Taula", lifespan=lifespan)
 
 def require_auth(session: Optional[str] = Cookie(None)):
     if not session:
-        raise HTTPException(401, "No autenticado")
+        raise HTTPException(401, "Ez dago saiorik hasita")
     with get_db() as conn:
         row = conn.execute("SELECT * FROM sessions WHERE token=?", (session,)).fetchone()
     if not row:
-        raise HTTPException(401, "Sesión no válida")
+        raise HTTPException(401, "Saioa ez da baliozkoa")
     created = datetime.strptime(row["created_at"], "%Y-%m-%d %H:%M:%S")
     if datetime.utcnow() - created > timedelta(days=SESSION_MAX_AGE_DAYS):
-        raise HTTPException(401, "Sesión caducada")
+        raise HTTPException(401, "Saioa iraungita dago")
 
 
 class NodeIn(BaseModel):
@@ -234,24 +234,24 @@ def validate_cidr(cidr):
     try:
         ip_network(cidr, strict=True)
     except ValueError as exc:
-        raise HTTPException(400, f"Rango CIDR inválido: {exc}")
+        raise HTTPException(400, f"CIDR tarte baliogabea: {exc}")
 
 
 def validate_ip_in_cidr(ip_str, cidr):
     try:
         addr = ip_address(ip_str)
     except ValueError:
-        raise HTTPException(400, f"IP inválida: {ip_str}")
+        raise HTTPException(400, f"IP baliogabea: {ip_str}")
     if addr not in ip_network(cidr, strict=True):
-        raise HTTPException(400, f"La IP {ip_str} no pertenece al rango {cidr}")
+        raise HTTPException(400, f"{ip_str} IPa ez dago {cidr} tartean")
 
 
 def get_range_node(conn, node_id):
     row = conn.execute("SELECT * FROM nodes WHERE id=?", (node_id,)).fetchone()
     if not row:
-        raise HTTPException(404, "Rango no encontrado")
+        raise HTTPException(404, "Tartea ez da aurkitu")
     if row["node_type"] != "rango":
-        raise HTTPException(400, "El nodo no es un rango")
+        raise HTTPException(400, "Nodoa ez da tarte bat")
     return row
 
 
@@ -316,27 +316,27 @@ def get_tree():
 @app.post("/api/nodes")
 def create_node(node: NodeIn, _auth=Depends(require_auth)):
     if node.node_type not in ("rango", "agrupacion"):
-        raise HTTPException(400, "node_type debe ser 'rango' o 'agrupacion'")
+        raise HTTPException(400, "node_type balioak 'rango' edo 'agrupacion' izan behar du")
     if not node.name.strip():
-        raise HTTPException(400, "El nombre es obligatorio")
+        raise HTTPException(400, "Izena beharrezkoa da")
 
     with get_db() as conn:
         if node.parent_id is None:
             if not node.site or not valid_site(conn, node.site) or not node.role or not valid_role(conn, node.role):
-                raise HTTPException(400, "site/role inválidos para un nodo de primer nivel")
+                raise HTTPException(400, "site/role baliogabeak lehen mailako nodo baterako")
             site, role = node.site, node.role
         else:
             parent = conn.execute("SELECT * FROM nodes WHERE id=?", (node.parent_id,)).fetchone()
             if not parent:
-                raise HTTPException(404, "Nodo padre no encontrado")
+                raise HTTPException(404, "Guraso nodoa ez da aurkitu")
             if parent["node_type"] != "agrupacion":
-                raise HTTPException(400, "Solo se puede añadir dentro de una agrupación")
+                raise HTTPException(400, "Talde baten barruan bakarrik gehi daiteke")
             site, role = parent["site"], parent["role"]
 
         cidr = None
         if node.node_type == "rango":
             if not node.cidr:
-                raise HTTPException(400, "El rango (CIDR) es obligatorio en un 'rango'")
+                raise HTTPException(400, "Tartea (CIDR) beharrezkoa da 'rango' motako nodo batean")
             validate_cidr(node.cidr)
             cidr = node.cidr
 
@@ -353,11 +353,11 @@ def update_node(node_id: int, patch: NodeUpdate, _auth=Depends(require_auth)):
     with get_db() as conn:
         row = conn.execute("SELECT * FROM nodes WHERE id=?", (node_id,)).fetchone()
         if not row:
-            raise HTTPException(404, "No encontrado")
+            raise HTTPException(404, "Ez da aurkitu")
 
         name = patch.name.strip() if patch.name is not None else row["name"]
         if not name:
-            raise HTTPException(400, "El nombre es obligatorio")
+            raise HTTPException(400, "Izena beharrezkoa da")
         description = patch.description if patch.description is not None else row["description"]
         cidr = row["cidr"]
         if row["node_type"] == "rango" and patch.cidr is not None:
@@ -376,7 +376,7 @@ def delete_node(node_id: int, _auth=Depends(require_auth)):
     with get_db() as conn:
         row = conn.execute("SELECT id FROM nodes WHERE id=?", (node_id,)).fetchone()
         if not row:
-            raise HTTPException(404, "No encontrado")
+            raise HTTPException(404, "Ez da aurkitu")
         conn.execute("DELETE FROM nodes WHERE id=?", (node_id,))
     return {"ok": True}
 
@@ -391,11 +391,11 @@ def _list_named(table):
 def _create_named(table, name, _auth):
     name = name.strip()
     if not name:
-        raise HTTPException(400, "El nombre es obligatorio")
+        raise HTTPException(400, "Izena beharrezkoa da")
     slug = slugify(name)
     with get_db() as conn:
         if conn.execute(f"SELECT 1 FROM {table} WHERE slug=?", (slug,)).fetchone():
-            raise HTTPException(409, "Ya existe uno con ese nombre")
+            raise HTTPException(409, "Badago izen hori duen bat jada")
         cur = conn.execute(f"INSERT INTO {table} (slug, name) VALUES (?, ?)", (slug, name))
         return {"id": cur.lastrowid, "slug": slug, "name": name}
 
@@ -404,12 +404,12 @@ def _delete_named(table, node_column, item_id):
     with get_db() as conn:
         row = conn.execute(f"SELECT * FROM {table} WHERE id=?", (item_id,)).fetchone()
         if not row:
-            raise HTTPException(404, "No encontrado")
+            raise HTTPException(404, "Ez da aurkitu")
         in_use = conn.execute(
             f"SELECT COUNT(*) AS n FROM nodes WHERE {node_column}=?", (row["slug"],)
         ).fetchone()["n"]
         if in_use:
-            raise HTTPException(409, f"No se puede borrar: {in_use} elemento(s) lo usan todavía")
+            raise HTTPException(409, f"Ezin da ezabatu: {in_use} elementuk erabiltzen dute oraindik")
         conn.execute(f"DELETE FROM {table} WHERE id=?", (item_id,))
     return {"ok": True}
 
@@ -457,10 +457,10 @@ def list_columns():
 def create_column(col: ColumnIn, _auth=Depends(require_auth)):
     name = col.name.strip()
     if not name:
-        raise HTTPException(400, "El nombre de columna es obligatorio")
+        raise HTTPException(400, "Zutabearen izena beharrezkoa da")
     with get_db() as conn:
         if conn.execute("SELECT id FROM columns_catalog WHERE name=?", (name,)).fetchone():
-            raise HTTPException(409, "Ya existe una columna con ese nombre")
+            raise HTTPException(409, "Badago izen hori duen zutabe bat jada")
         cur = conn.execute("INSERT INTO columns_catalog (name) VALUES (?)", (name,))
         return {"id": cur.lastrowid, "name": name}
 
@@ -469,7 +469,7 @@ def create_column(col: ColumnIn, _auth=Depends(require_auth)):
 def delete_column(column_id: int, _auth=Depends(require_auth)):
     with get_db() as conn:
         if not conn.execute("SELECT id FROM columns_catalog WHERE id=?", (column_id,)).fetchone():
-            raise HTTPException(404, "No encontrada")
+            raise HTTPException(404, "Ez da aurkitu")
         conn.execute("DELETE FROM columns_catalog WHERE id=?", (column_id,))
     return {"ok": True}
 
@@ -481,7 +481,7 @@ def add_range_column(node_id: int, body: RangeColumnIn, _auth=Depends(require_au
     with get_db() as conn:
         get_range_node(conn, node_id)
         if not conn.execute("SELECT id FROM columns_catalog WHERE id=?", (body.column_id,)).fetchone():
-            raise HTTPException(404, "Columna no encontrada")
+            raise HTTPException(404, "Zutabea ez da aurkitu")
         conn.execute(
             "INSERT OR IGNORE INTO range_columns (node_id, column_id) VALUES (?, ?)",
             (node_id, body.column_id),
@@ -518,7 +518,7 @@ def set_ip_value(node_id: int, body: IpValueSet, _auth=Depends(require_auth)):
         if not conn.execute(
             "SELECT 1 FROM range_columns WHERE node_id=? AND column_id=?", (node_id, body.column_id)
         ).fetchone():
-            raise HTTPException(400, "Esa columna no está activa en este rango")
+            raise HTTPException(400, "Zutabe hori ez dago aktibo tarte honetan")
 
         entry = conn.execute(
             "SELECT id FROM ip_entries WHERE node_id=? AND ip=?", (node_id, body.ip)
@@ -572,7 +572,7 @@ def login(body: LoginIn, response: Response):
     with get_db() as conn:
         row = conn.execute("SELECT * FROM auth_config WHERE id=1").fetchone()
     if not row or row["username"] != body.username or not verify_password(body.password, row["salt"], row["password_hash"]):
-        raise HTTPException(401, "Usuario o contraseña incorrectos")
+        raise HTTPException(401, "Erabiltzailea edo pasahitza okerra")
     token = secrets.token_hex(32)
     with get_db() as conn:
         conn.execute("INSERT INTO sessions (token) VALUES (?)", (token,))
@@ -597,9 +597,9 @@ def change_password(body: ChangePasswordIn, _auth=Depends(require_auth)):
     with get_db() as conn:
         row = conn.execute("SELECT * FROM auth_config WHERE id=1").fetchone()
         if not verify_password(body.current_password, row["salt"], row["password_hash"]):
-            raise HTTPException(400, "La contraseña actual no es correcta")
+            raise HTTPException(400, "Uneko pasahitza ez da zuzena")
         if len(body.new_password) < 4:
-            raise HTTPException(400, "La contraseña nueva es demasiado corta")
+            raise HTTPException(400, "Pasahitza berria laburregia da")
         salt, digest = hash_password(body.new_password)
         conn.execute("UPDATE auth_config SET password_hash=?, salt=? WHERE id=1", (digest, salt))
     return {"ok": True}

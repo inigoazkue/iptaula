@@ -93,9 +93,13 @@
   }
   .btn-text:hover { color: var(--btn-blue-ink); text-decoration-color: currentColor; transform: none; box-shadow: none; }
 
+  #dark-toggle-btn { display: flex; align-items: center; justify-content: center; padding: 6px 9px; }
+  #dark-toggle-btn svg { width: 16px; height: 16px; display: block; }
+
+  .search-row { margin-bottom: 14px; }
   #search-box {
     padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px;
-    background: var(--surface-1); color: var(--text-primary); font-size: 0.82rem; min-width: 220px;
+    background: var(--surface-1); color: var(--text-primary); font-size: 0.82rem; width: 280px; max-width: 100%;
   }
 
   table { border-collapse: collapse; width: 100%; table-layout: fixed; }
@@ -188,6 +192,17 @@
   .catalog-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--gridline); font-size: 0.85rem; }
   .catalog-row:last-child { border-bottom: none; }
 
+  /* --- modales de autenticación: más verticales/estrechos --- */
+  #login-modal, #password-modal { width: min(320px, 90vw); }
+  #login-modal .modal-header, #password-modal .modal-header { justify-content: center; position: relative; margin-bottom: 20px; }
+  #login-modal .modal-header .btn-neutral, #password-modal .modal-header .btn-neutral {
+    position: absolute; right: 0; top: 50%; transform: translateY(-50%); padding: 4px 9px;
+  }
+  #login-modal h2, #password-modal h2 { font-size: 1.05rem; }
+  .auth-form { display: flex; flex-direction: column; gap: 12px; padding: 4px 2px 2px; }
+  .auth-form input { width: 100%; padding: 10px 12px; font-size: 0.85rem; }
+  .auth-form button[type="submit"] { padding: 10px; font-size: 0.85rem; margin-top: 4px; }
+
   #status { color: var(--text-muted); font-size: 0.85rem; }
 </style>
 </head>
@@ -196,15 +211,18 @@
 <div class="topbar">
   <div>
     <h1>IP Taula</h1>
-    <p class="subtitle">Sedeen eta sare moten araberako sare-taula.</p>
+    <p class="subtitle">Egoitzen eta sare moten araberako sare-taula.</p>
   </div>
   <div class="topbar-right">
-    <input type="text" id="search-box" placeholder="Buscar IP, nombre, hostname...">
-    <button class="btn-neutral" id="dark-toggle-btn"></button>
+    <button class="btn-neutral" id="dark-toggle-btn" title="Modua aldatu"></button>
     <button class="btn-neutral" id="manage-matrix-btn" style="display:none;">Matrizea kudeatu</button>
     <button class="btn-neutral" id="manage-columns-btn" style="display:none;">Zutabeak kudeatu</button>
     <div id="auth-area"></div>
   </div>
+</div>
+
+<div class="search-row">
+  <input type="text" id="search-box" placeholder="Bilatu IP, izena, hostname...">
 </div>
 
 <div id="status">Kargatzen...</div>
@@ -223,8 +241,11 @@ let TREE = null;
 let COLUMNS = [];
 let isAuthenticated = false;
 let currentUsername = null;
-const expandedGroups = new Set(); // ids de agrupaciones desplegadas, sobrevive a los re-render
+const expandedGroups = new Set(); // agrupazio zabalduen idak, errenderizazioen artean irauten du
 let currentSearch = {matchedNodeIds: new Set(), expandIds: new Set(), ipMatches: new Map()};
+
+const SUN_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>`;
+const MOON_ICON = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.354 15.354A9 9 0 118.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>`;
 
 async function api(path, opts) {
   const resp = await fetch(`/api${path}`, {headers: {'Content-Type': 'application/json'}, ...opts});
@@ -258,7 +279,7 @@ function escapeHtml(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
 }
 
-/* ---------- tema claro/oscuro ---------- */
+/* ---------- modu iluna/argia ---------- */
 
 function systemPrefersDark() {
   return window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -267,23 +288,24 @@ function isEffectivelyDark() {
   const current = document.documentElement.getAttribute('data-theme');
   return current === 'dark' || (!current && systemPrefersDark());
 }
-function updateThemeButtonLabel() {
-  document.getElementById('dark-toggle-btn').textContent = isEffectivelyDark() ? 'Modu argia' : 'Modu iluna';
+function updateThemeButtonIcon() {
+  // modu ilunean eguzkia erakusten da (argira aldatzeko gonbita), eta alderantziz
+  document.getElementById('dark-toggle-btn').innerHTML = isEffectivelyDark() ? SUN_ICON : MOON_ICON;
 }
 function initTheme() {
   const saved = localStorage.getItem('iptaula-theme');
   if (saved) document.documentElement.setAttribute('data-theme', saved);
-  updateThemeButtonLabel();
+  updateThemeButtonIcon();
 }
 document.getElementById('dark-toggle-btn').addEventListener('click', () => {
   const next = isEffectivelyDark() ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', next);
   localStorage.setItem('iptaula-theme', next);
-  updateThemeButtonLabel();
+  updateThemeButtonIcon();
 });
 initTheme();
 
-/* ---------- autenticación (login/logout/cambio de contraseña) ---------- */
+/* ---------- autentifikazioa (saioa hasi/itxi, pasahitza aldatu) ---------- */
 
 function renderAuthUI() {
   document.getElementById('manage-matrix-btn').style.display = isAuthenticated ? '' : 'none';
@@ -292,7 +314,7 @@ function renderAuthUI() {
   if (isAuthenticated) {
     authArea.innerHTML = `
       <span style="font-size:0.78rem; color:var(--text-secondary); margin-right:2px;">${escapeHtml(currentUsername)}</span>
-      <button class="btn-text" id="change-password-btn">contraseña</button>
+      <button class="btn-text" id="change-password-btn">pasahitza</button>
       <button class="btn-neutral" id="logout-btn">Itxi saioa</button>
     `;
     document.getElementById('logout-btn').addEventListener('click', async () => {
@@ -311,12 +333,12 @@ function openLoginModal() {
   body.innerHTML = `
     <div class="modal-header">
       <h2>Hasi saioa</h2>
-      <button class="btn-neutral" id="close-login-modal">Cerrar</button>
+      <button class="btn-neutral" id="close-login-modal">Itxi</button>
     </div>
-    <form class="inline-form" id="login-form">
-      <input name="username" placeholder="Usuario" required style="flex:1 1 100%;">
-      <input name="password" type="password" placeholder="Contraseña" required style="flex:1 1 100%;">
-      <button type="submit" class="btn-blue">Entrar</button>
+    <form class="auth-form" id="login-form">
+      <input name="username" placeholder="Erabiltzailea" required>
+      <input name="password" type="password" placeholder="Pasahitza" required>
+      <button type="submit" class="btn-blue">Sartu</button>
     </form>
     <div class="form-error" id="login-error"></div>
   `;
@@ -342,12 +364,12 @@ function openPasswordModal() {
   body.innerHTML = `
     <div class="modal-header">
       <h2>Pasahitza aldatu</h2>
-      <button class="btn-neutral" id="close-password-modal">Cerrar</button>
+      <button class="btn-neutral" id="close-password-modal">Itxi</button>
     </div>
-    <form class="inline-form" id="password-form">
-      <input name="current" type="password" placeholder="Contraseña actual" required style="flex:1 1 100%;">
-      <input name="next" type="password" placeholder="Contraseña nueva" required style="flex:1 1 100%;">
-      <button type="submit" class="btn-blue">Guardar</button>
+    <form class="auth-form" id="password-form">
+      <input name="current" type="password" placeholder="Uneko pasahitza" required>
+      <input name="next" type="password" placeholder="Pasahitza berria" required>
+      <button type="submit" class="btn-blue">Gorde</button>
     </form>
     <div class="form-error" id="password-error"></div>
   `;
@@ -360,7 +382,7 @@ function openPasswordModal() {
         current_password: e.target.current.value, new_password: e.target.next.value,
       })});
       document.getElementById('password-modal').close();
-      alert('Contraseña actualizada.');
+      alert('Pasahitza eguneratu da.');
     } catch (err) {
       document.getElementById('password-error').textContent = err.message;
     }
@@ -368,7 +390,7 @@ function openPasswordModal() {
   document.getElementById('password-modal').showModal();
 }
 
-/* ---------- búsqueda ---------- */
+/* ---------- bilaketa ---------- */
 
 function computeSearch(query) {
   const q = query.trim().toLowerCase();
@@ -420,16 +442,16 @@ document.getElementById('search-box').addEventListener('input', (e) => {
   }, 200);
 });
 
-/* ---------- formularios de alta/edición de nodos ---------- */
+/* ---------- nodoen alta/edizio formularioak ---------- */
 
 function addButtons(parentId, site, role, onDone) {
   const wrap = document.createElement('div');
   wrap.className = 'cell-actions';
   if (!isAuthenticated) return wrap;
   const addRango = document.createElement('button');
-  addRango.className = 'btn-blue'; addRango.textContent = '+ rango';
+  addRango.className = 'btn-blue'; addRango.textContent = '+ tartea';
   const addGroup = document.createElement('button');
-  addGroup.className = 'btn-neutral'; addGroup.textContent = '+ agrupación';
+  addGroup.className = 'btn-neutral'; addGroup.textContent = '+ taldea';
   wrap.append(addRango, addGroup);
   addRango.addEventListener('click', () => wrap.replaceWith(buildForm('rango', parentId, site, role, onDone, () => wrap)));
   addGroup.addEventListener('click', () => wrap.replaceWith(buildForm('agrupacion', parentId, site, role, onDone, () => wrap)));
@@ -440,11 +462,11 @@ function buildForm(nodeType, parentId, site, role, onDone, getOriginal) {
   const form = document.createElement('form');
   form.className = 'inline-form';
   form.innerHTML = `
-    <input name="name" placeholder="Nombre" required>
+    <input name="name" placeholder="Izena" required>
     ${nodeType === 'rango' ? '<input name="cidr" placeholder="10.1.2.0/24" required>' : ''}
-    <input name="description" placeholder="Descripción (opcional)">
-    <button type="submit" class="btn-blue">Guardar</button>
-    <button type="button" class="btn-neutral cancel">Cancelar</button>
+    <input name="description" placeholder="Deskribapena (aukerakoa)">
+    <button type="submit" class="btn-blue">Gorde</button>
+    <button type="button" class="btn-neutral cancel">Utzi</button>
   `;
   form.querySelector('.cancel').addEventListener('click', () => form.replaceWith(getOriginal()));
   form.addEventListener('submit', async (e) => {
@@ -478,9 +500,9 @@ function buildEditForm(node, onDone) {
   form.className = 'inline-form';
   form.innerHTML = `
     <input name="name" value="${escapeAttr(node.name)}" required>
-    <input name="description" value="${escapeAttr(node.description || '')}" placeholder="Descripción (opcional)">
-    <button type="submit" class="btn-blue">Guardar</button>
-    <button type="button" class="btn-neutral cancel">Cancelar</button>
+    <input name="description" value="${escapeAttr(node.description || '')}" placeholder="Deskribapena (aukerakoa)">
+    <button type="submit" class="btn-blue">Gorde</button>
+    <button type="button" class="btn-neutral cancel">Utzi</button>
   `;
   form.querySelector('.cancel').addEventListener('click', () => onDone(false));
   form.addEventListener('submit', async (e) => {
@@ -507,13 +529,13 @@ function countDescendants(node) {
 
 async function deleteNode(node) {
   const n = countDescendants(node);
-  const msg = n > 0 ? `"${node.name}" contiene ${n} elemento(s) dentro. ¿Borrar todo?` : `¿Borrar "${node.name}"?`;
+  const msg = n > 0 ? `"${node.name}" barruan ${n} elementu daude. Denak ezabatu?` : `"${node.name}" ezabatu?`;
   if (!confirm(msg)) return;
   await api(`/nodes/${node.id}`, {method: 'DELETE'});
   await refresh();
 }
 
-/* ---------- tarjeta de nodo en la matriz ---------- */
+/* ---------- matrizeko nodo-txartela ---------- */
 
 function renderNode(node, site, role) {
   const el = document.createElement('div');
@@ -538,7 +560,7 @@ function renderNode(node, site, role) {
         <tr><th>IP</th>${cols.map(c => `<th>${escapeHtml(c.name)}</th>`).join('')}</tr>
         ${shown.map(e => `<tr class="${matchedIps && matchedIps.has(e.ip) ? 'ip-row-search-match' : ''}"><td>${e.ip}</td>${cols.map(c => `<td>${escapeHtml(e.values[String(c.id)] || '')}</td>`).join('')}</tr>`).join('')}
       </table>
-      ${entries.length > MAX_PREVIEW_ROWS ? `<span class="mini-ip-more">+${entries.length - MAX_PREVIEW_ROWS} más - ábrelo para verlas todas</span>` : ''}
+      ${entries.length > MAX_PREVIEW_ROWS ? `<span class="mini-ip-more">+${entries.length - MAX_PREVIEW_ROWS} gehiago - ireki guztiak ikusteko</span>` : ''}
     `;
   }
   const colNames = cols.map(c => escapeHtml(c.name)).join(', ');
@@ -547,8 +569,8 @@ function renderNode(node, site, role) {
     <div class="node-head">
       <span class="node-name">${escapeHtml(node.name)}</span>
       <span class="node-ctrl">
-        ${isAuthenticated && node.node_type === 'agrupacion' ? '<button class="btn-text" data-action="edit">editar</button>' : ''}
-        ${isAuthenticated ? '<button class="btn-text" data-action="delete">borrar</button>' : ''}
+        ${isAuthenticated && node.node_type === 'agrupacion' ? '<button class="btn-text" data-action="edit">editatu</button>' : ''}
+        ${isAuthenticated ? '<button class="btn-text" data-action="delete">ezabatu</button>' : ''}
       </span>
     </div>
     ${node.description ? `<span class="node-desc">${escapeHtml(node.description)}</span>` : ''}
@@ -586,11 +608,11 @@ function renderNode(node, site, role) {
     });
   }
 
-  // clic en toda la tarjeta. Se para la propagación siempre (para que una
-  // tarjeta hija, o cualquier botón/input dentro - alta, edición, etc. -
-  // no disparen también el toggle de la agrupación que la contiene), pero
-  // solo se ejecuta la acción principal si el clic no viene de un control
-  // interactivo (botón, input, select, formulario...).
+  // klika txartel osoan. Propagazioa beti geldiarazten da (txartel ume batek,
+  // edo barruko edozein botoi/inputek - alta, edizioa... - ez dezan bere
+  // agrupazio-edukiontziaren toggle-a ere eragin), baina ekintza nagusia
+  // kontrol interaktibo batetik (botoi, input, select, formulario...) ez
+  // datorren klikean bakarrik exekutatzen da.
   el.addEventListener('click', (e) => {
     e.stopPropagation();
     if (e.target.closest('button, input, select, textarea, a, form')) return;
@@ -633,7 +655,7 @@ function renderGrid() {
   table.style.display = 'table';
 }
 
-/* ---------- modal de rango: metadatos + columnas + tabla de IPs ---------- */
+/* ---------- tarte-modala: metadatuak + zutabeak + IP taula ---------- */
 
 function findNodeById(id, nodes) {
   for (const n of nodes) {
@@ -673,17 +695,17 @@ async function renderRangeModal(nodeId) {
   body.innerHTML = `
     <div class="modal-header">
       <h2>${escapeHtml(node.name)}</h2>
-      <button class="btn-neutral" id="close-range-modal">Cerrar</button>
+      <button class="btn-neutral" id="close-range-modal">Itxi</button>
     </div>
 
     <div class="modal-section">
-      <h3>Datos del rango</h3>
+      <h3>Tartearen datuak</h3>
       ${isAuthenticated ? `
         <form class="inline-form" id="range-meta-form">
-          <input name="name" value="${escapeAttr(node.name)}" placeholder="Nombre" required>
+          <input name="name" value="${escapeAttr(node.name)}" placeholder="Izena" required>
           <input name="cidr" value="${escapeAttr(node.cidr)}" placeholder="10.1.2.0/24" required>
-          <input name="description" value="${escapeAttr(node.description || '')}" placeholder="Descripción (opcional)">
-          <button type="submit" class="btn-blue">Guardar</button>
+          <input name="description" value="${escapeAttr(node.description || '')}" placeholder="Deskribapena (aukerakoa)">
+          <button type="submit" class="btn-blue">Gorde</button>
         </form>
       ` : `
         <p class="node-desc">${escapeHtml(node.cidr)}${node.description ? ' - ' + escapeHtml(node.description) : ''}</p>
@@ -691,26 +713,26 @@ async function renderRangeModal(nodeId) {
     </div>
 
     <div class="modal-section">
-      <h3>Columnas activas</h3>
+      <h3>Zutabe aktiboak</h3>
       <div id="active-columns">
-        ${(node.columns || []).map(c => `<span class="col-chip">${escapeHtml(c.name)} ${isAuthenticated ? `<button data-col="${c.id}" title="Quitar columna">×</button>` : ''}</span>`).join('') || '<span class="node-desc">Ninguna todavía.</span>'}
+        ${(node.columns || []).map(c => `<span class="col-chip">${escapeHtml(c.name)} ${isAuthenticated ? `<button data-col="${c.id}" title="Zutabea kendu">×</button>` : ''}</span>`).join('') || '<span class="node-desc">Oraindik bat ere ez.</span>'}
       </div>
       ${isAuthenticated ? `
         <form class="inline-form" id="add-column-form">
           <select name="column_id" ${availableCols.length ? '' : 'disabled'}>
-            ${availableCols.length ? availableCols.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('') : '<option>No hay más columnas en el catálogo</option>'}
+            ${availableCols.length ? availableCols.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('') : '<option>Ez dago zutabe gehiago katalogoan</option>'}
           </select>
-          <button type="submit" class="btn-green" ${availableCols.length ? '' : 'disabled'}>+ Añadir al rango</button>
-          <button type="button" class="btn-text" id="open-columns-catalog">Gestionar columnas...</button>
+          <button type="submit" class="btn-green" ${availableCols.length ? '' : 'disabled'}>+ Tarteari gehitu</button>
+          <button type="button" class="btn-text" id="open-columns-catalog">Zutabeak kudeatu...</button>
         </form>
       ` : ''}
     </div>
 
     <div class="modal-section">
-      <h3>Direcciones IP</h3>
+      <h3>IP helbideak</h3>
       ${isAuthenticated
-        ? '<p class="node-desc" style="margin-bottom:8px;">Se listan todas las IPs del rango. Escribe directamente en una celda para guardarla (se guarda sola al salir del campo); una fila sin ningún dato se considera libre.</p>'
-        : '<p class="node-desc" style="margin-bottom:8px;">Inicia sesión para poder editar. Verde = libre, naranja = ocupada.</p>'}
+        ? '<p class="node-desc" style="margin-bottom:8px;">Tartearen IP guztiak zerrendatzen dira. Idatzi zuzenean gelaxka batean gordetzeko (eremutik irtetean bakarrik gordetzen da); daturik gabeko errenkada librea dela ulertzen da.</p>'
+        : '<p class="node-desc" style="margin-bottom:8px;">Hasi saioa editatzeko. Berdea = librea, laranja = erabilita.</p>'}
       <div id="ip-table-wrap"></div>
     </div>
   `;
@@ -743,7 +765,7 @@ async function renderRangeModal(nodeId) {
 
     body.querySelectorAll('#active-columns button').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!confirm('¿Quitar esta columna del rango? Se perderán sus valores en este rango.')) return;
+        if (!confirm('Zutabe hau tartetik kendu? Tarte honetako balioak galduko dira.')) return;
         await api(`/nodes/${node.id}/columns/${btn.dataset.col}`, {method: 'DELETE'});
         await refresh();
         await renderRangeModal(nodeId);
@@ -768,7 +790,7 @@ function hostsOf(cidr) {
   if (hostBits === 0) return [base];
   const size = Math.pow(2, hostBits);
   const networkInt = (baseInt >>> hostBits) * size >>> 0;
-  const noReserved = hostBits <= 1; // /31: sin red/broadcast reservados (RFC 3021)
+  const noReserved = hostBits <= 1; // /31: sarea/broadcast gorderik gabe (RFC 3021)
   const first = noReserved ? 0 : 1;
   const last = noReserved ? size - 1 : size - 2;
   const hosts = [];
@@ -782,7 +804,7 @@ function renderIpTable(node) {
   const wrap = document.getElementById('ip-table-wrap');
   const cols = node.columns || [];
   if (!cols.length) {
-    wrap.innerHTML = '<span class="node-desc">Añade al menos una columna para poder registrar datos por IP.</span>';
+    wrap.innerHTML = '<span class="node-desc">Gehitu gutxienez zutabe bat IP bakoitzeko datuak erregistratzeko.</span>';
     return;
   }
 
@@ -798,7 +820,7 @@ function renderIpTable(node) {
     const note = document.createElement('p');
     note.className = 'node-desc';
     note.style.marginBottom = '6px';
-    note.textContent = `Rango muy grande: se muestran las primeras ${IP_TABLE_MAX_ROWS} de ${allHosts.length} IPs.`;
+    note.textContent = `Tarte oso handia: lehen ${IP_TABLE_MAX_ROWS} IPak erakusten dira ${allHosts.length}-tik.`;
     wrap.appendChild(note);
   }
 
@@ -837,8 +859,8 @@ function renderIpTable(node) {
         const stillHasData = [...tr.querySelectorAll('input[data-col]')].some(i => i.value.trim() !== '');
         tr.classList.toggle('ip-row-used', stillHasData);
         tr.classList.toggle('ip-row-free', !stillHasData);
-        // se actualiza en memoria para que la vista rápida de la tarjeta
-        // (fuera del modal) quede al día sin recargar ni cerrar el modal
+        // memorian eguneratzen da modaletik kanpoko txartelaren ikuspegi
+        // azkarra egunean egoteko, modala itxi edo birkargatu gabe
         loadAll();
       } catch (err) {
         input.title = err.message;
@@ -850,7 +872,7 @@ function renderIpTable(node) {
   });
 }
 
-/* ---------- modal de gestión de columnas (catálogo global) ---------- */
+/* ---------- zutabeen katalogoaren modala ---------- */
 
 async function openColumnsModal() {
   await renderColumnsModal();
@@ -862,14 +884,14 @@ async function renderColumnsModal() {
   body.innerHTML = `
     <div class="modal-header">
       <h2>Zutabeak kudeatu</h2>
-      <button class="btn-neutral" id="close-columns-modal">Cerrar</button>
+      <button class="btn-neutral" id="close-columns-modal">Itxi</button>
     </div>
     <div id="catalog-list">
-      ${COLUMNS.map(c => `<div class="catalog-row"><span>${escapeHtml(c.name)}</span><button class="btn-text" data-col="${c.id}">borrar</button></div>`).join('') || '<span class="node-desc">Sin columnas todavía.</span>'}
+      ${COLUMNS.map(c => `<div class="catalog-row"><span>${escapeHtml(c.name)}</span><button class="btn-text" data-col="${c.id}">ezabatu</button></div>`).join('') || '<span class="node-desc">Oraindik zutaberik ez.</span>'}
     </div>
     <form class="inline-form" id="new-column-form" style="margin-top:12px;">
-      <input name="name" placeholder="Nombre de la columna (p.ej. Hostname, MAC...)" required>
-      <button type="submit" class="btn-green">+ Crear columna</button>
+      <input name="name" placeholder="Zutabearen izena (adib. Hostname, MAC...)" required>
+      <button type="submit" class="btn-green">+ Zutabea sortu</button>
     </form>
     <div class="form-error" id="col-form-error"></div>
   `;
@@ -877,7 +899,7 @@ async function renderColumnsModal() {
 
   body.querySelectorAll('#catalog-list button[data-col]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!confirm('¿Borrar esta columna del catálogo? Se quitará de todos los rangos que la usen.')) return;
+      if (!confirm('Zutabe hau katalogotik ezabatu? Erabiltzen duten tarte guztietatik kenduko da.')) return;
       await api(`/columns/${btn.dataset.col}`, {method: 'DELETE'});
       await afterCatalogChange();
     });
@@ -895,8 +917,8 @@ async function renderColumnsModal() {
   });
 }
 
-// tras crear/borrar una columna del catálogo, refresca tanto esta lista
-// como el desplegable del modal de rango si hay uno abierto detrás
+// katalogoko zutabe bat sortu/ezabatu ondoren, zerrenda hau eta atzean
+// irekita dagoen tarte-modalaren desplegablea ere freskatzen dira
 async function afterCatalogChange() {
   await refresh();
   await renderColumnsModal();
@@ -907,7 +929,7 @@ async function afterCatalogChange() {
 
 document.getElementById('manage-columns-btn').addEventListener('click', () => openColumnsModal());
 
-/* ---------- modal de gestión de la matriz (sedes y roles) ---------- */
+/* ---------- matrizearen modala (egoitzak eta sare motak) ---------- */
 
 async function openMatrixModal() {
   await renderMatrixModal();
@@ -919,27 +941,27 @@ async function renderMatrixModal() {
   body.innerHTML = `
     <div class="modal-header">
       <h2>Matrizea kudeatu</h2>
-      <button class="btn-neutral" id="close-matrix-modal">Cerrar</button>
+      <button class="btn-neutral" id="close-matrix-modal">Itxi</button>
     </div>
     <div class="modal-section">
-      <h3>Sedeak (columnas)</h3>
+      <h3>Egoitzak (zutabeak)</h3>
       <div id="site-list">
-        ${SITES.map(s => `<div class="catalog-row"><span>${escapeHtml(s.label)}</span><button class="btn-text" data-kind="site" data-id="${s.id}">borrar</button></div>`).join('')}
+        ${SITES.map(s => `<div class="catalog-row"><span>${escapeHtml(s.label)}</span><button class="btn-text" data-kind="site" data-id="${s.id}">ezabatu</button></div>`).join('')}
       </div>
       <form class="inline-form" id="new-site-form">
-        <input name="name" placeholder="Nombre de la sede">
-        <button type="submit" class="btn-green">+ Añadir sede</button>
+        <input name="name" placeholder="Egoitzaren izena">
+        <button type="submit" class="btn-green">+ Egoitza gehitu</button>
       </form>
       <div class="form-error" id="site-form-error"></div>
     </div>
     <div class="modal-section">
-      <h3>Sare motak (filas)</h3>
+      <h3>Sare motak (errenkadak)</h3>
       <div id="role-list">
-        ${ROLES.map(r => `<div class="catalog-row"><span>${escapeHtml(r.label)}</span><button class="btn-text" data-kind="role" data-id="${r.id}">borrar</button></div>`).join('')}
+        ${ROLES.map(r => `<div class="catalog-row"><span>${escapeHtml(r.label)}</span><button class="btn-text" data-kind="role" data-id="${r.id}">ezabatu</button></div>`).join('')}
       </div>
       <form class="inline-form" id="new-role-form">
-        <input name="name" placeholder="Nombre del tipo de red">
-        <button type="submit" class="btn-green">+ Añadir tipo</button>
+        <input name="name" placeholder="Sare motaren izena">
+        <button type="submit" class="btn-green">+ Mota gehitu</button>
       </form>
       <div class="form-error" id="role-form-error"></div>
     </div>
@@ -949,7 +971,7 @@ async function renderMatrixModal() {
   body.querySelectorAll('button[data-kind]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const endpoint = btn.dataset.kind === 'site' ? 'sites' : 'roles';
-      if (!confirm('¿Borrar? Solo se puede si no hay nada usándola todavía.')) return;
+      if (!confirm('Ezabatu? Erabiltzen ari den ezer ez badago bakarrik ezaba daiteke.')) return;
       try {
         await api(`/${endpoint}/${btn.dataset.id}`, {method: 'DELETE'});
         await refresh();
