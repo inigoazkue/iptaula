@@ -1048,6 +1048,7 @@ async function renderRangeModal(nodeId) {
 
     <div class="modal-section modal-section-compact modal-section-cols">
       <div class="modal-col-left">
+        <h3>Tartearen datuak</h3>
         ${isAdmin() ? `
           <form class="inline-form" id="range-meta-form">
             <input name="name" value="${escapeAttr(node.name)}" placeholder="Izena" required>
@@ -1059,7 +1060,9 @@ async function renderRangeModal(nodeId) {
           <p class="node-desc">${escapeHtml(node.cidr)}${node.description ? ' - ' + escapeHtml(node.description) : ''}</p>
         `}
       </div>
-      <div class="modal-col-right inline-form" id="active-columns-row">
+      <div class="modal-col-right">
+        <h3>Zutabe aktiboak</h3>
+        <div class="inline-form" id="active-columns-row">
         <div id="active-columns">
           ${(node.columns || []).map(c => `<span class="col-chip">${escapeHtml(c.name)} ${isAdmin() ? `<button data-col="${c.id}" title="Zutabea kendu">×</button>` : ''}</span>`).join('') || '<span class="node-desc">Zutaberik ez.</span>'}
         </div>
@@ -1072,6 +1075,7 @@ async function renderRangeModal(nodeId) {
             <button type="button" class="btn-text" id="open-columns-catalog">Zutabeak kudeatu...</button>
           </form>
         ` : ''}
+        </div>
       </div>
     </div>
 
