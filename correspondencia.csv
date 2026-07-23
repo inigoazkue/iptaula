@@ -1,0 +1,3 @@
+url_antiguo,nombre_nuevo,site,role,grupo_padre,cidr,columnas,node_id,estado
+IPs_10_217_157.htm,Bilbao General,bilbo,gestioa,,10.217.157.0/24,EQUIPO=Hostname,6,cargado
+IPs_10_214_154.htm,Bilbao INGPROD,bilbo,gestioa,,10.214.154.0/24,"EQUIPO=Hostname; WHO=Erabiltzailea",14,cargado
