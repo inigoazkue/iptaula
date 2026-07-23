@@ -3,9 +3,12 @@ services:
     build:
       context: .
       args:
-        HTTP_PROXY: ${http_proxy:-}
-        HTTPS_PROXY: ${https_proxy:-}
-        NO_PROXY: ${no_proxy:-}
+        # Valor por defecto = proxy corporativo de EITB, para que el build
+        # funcione aunque `sudo` no propague las variables de entorno del
+        # usuario. Se puede sobrescribir con las del shell si existen.
+        HTTP_PROXY: ${http_proxy:-http://proxycloud.eitb.lan:80}
+        HTTPS_PROXY: ${https_proxy:-http://proxycloud.eitb.lan:80}
+        NO_PROXY: ${no_proxy:-localhost,127.0.0.1,.etb,10.0.0.0/8}
     ports:
       - "8000:8000"
     volumes:
