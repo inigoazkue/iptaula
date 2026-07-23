@@ -27,7 +27,7 @@
     --btn-neutral:  #eceafc; --btn-neutral-hover: #ddd9f7; --btn-neutral-ink: #33314a;
 
     --row-free: #eaf7ec;
-    --row-used: #fdf0e0;
+    --row-used: #a9def8;
     --search-match: #fff2a8;
   }
   @media (prefers-color-scheme: dark) {
@@ -43,7 +43,7 @@
       --btn-green: #23402c; --btn-green-hover: #2d5238; --btn-green-ink: #c8ecd3;
       --btn-pink: #4a2830; --btn-pink-hover: #5e323c; --btn-pink-ink: #f8ccd2;
       --btn-neutral: #2b2940; --btn-neutral-hover: #383552; --btn-neutral-ink: #eceafc;
-      --row-free: #1d3320; --row-used: #3a2c18; --search-match: #4a4420;
+      --row-free: #1d3320; --row-used: #1c3a4d; --search-match: #4a4420;
     }
   }
   :root[data-theme="dark"] {
@@ -58,7 +58,7 @@
     --btn-green: #23402c; --btn-green-hover: #2d5238; --btn-green-ink: #c8ecd3;
     --btn-pink: #4a2830; --btn-pink-hover: #5e323c; --btn-pink-ink: #f8ccd2;
     --btn-neutral: #2b2940; --btn-neutral-hover: #383552; --btn-neutral-ink: #eceafc;
-    --row-free: #1d3320; --row-used: #3a2c18; --search-match: #4a4420;
+    --row-free: #1d3320; --row-used: #1c3a4d; --search-match: #4a4420;
   }
 
   * { box-sizing: border-box; }
@@ -95,9 +95,11 @@
   #dark-toggle-btn { display: flex; align-items: center; justify-content: center; padding: 6px 9px; }
   #dark-toggle-btn svg { width: 16px; height: 16px; display: block; }
 
-  #undo-btn, #redo-btn, #modal-undo-btn, #modal-redo-btn {
+  #undo-btn, #redo-btn, #modal-undo-btn, #modal-redo-btn, #delete-mode-btn {
     display: flex; align-items: center; justify-content: center; padding: 6px 9px;
   }
+  #delete-mode-btn.armed { background: var(--btn-pink); color: var(--btn-pink-ink); }
+  #delete-mode-btn svg { width: 16px; height: 16px; display: block; }
   #undo-btn svg, #redo-btn svg, #modal-undo-btn svg, #modal-redo-btn svg { width: 16px; height: 16px; display: block; }
   button:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
   .modal-header-actions { display: flex; gap: 6px; align-items: center; }
@@ -121,18 +123,30 @@
   }
   #settings-menu button:hover { background: var(--btn-neutral-hover); transform: none; box-shadow: none; }
 
+  .title-row { display: flex; align-items: baseline; gap: 10px; }
   #version-badge {
-    position: fixed; bottom: 22px; left: 22px; z-index: 50;
     background: var(--surface-1); color: var(--text-muted);
     border: 1px solid var(--border); border-radius: 20px;
-    padding: 5px 13px; font-size: 0.72rem; box-shadow: var(--shadow);
+    padding: 3px 11px; font-size: 0.7rem; box-shadow: var(--shadow);
   }
 
   .search-row { margin-bottom: 14px; }
+  .search-wrap { position: relative; display: inline-block; max-width: 100%; }
   #search-box {
-    padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px;
+    padding: 7px 30px 7px 12px; border: 1px solid var(--border); border-radius: 8px;
     background: var(--surface-1); color: var(--text-primary); font-size: 0.82rem; width: 280px; max-width: 100%;
   }
+  #search-clear-btn {
+    position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+    width: 20px; height: 20px; padding: 0; display: none; align-items: center; justify-content: center;
+    background: none; color: var(--text-muted); border-radius: 50%; font-size: 0.9rem; line-height: 1;
+  }
+  #search-clear-btn:hover { background: var(--btn-neutral-hover); transform: translateY(-50%); box-shadow: none; }
+  #search-clear-btn.show { display: flex; }
+
+  .node-search-results { margin-top: 6px; border-top: 1px dashed var(--border); padding-top: 4px; }
+  .node-search-results div { font-size: 0.72rem; font-family: ui-monospace, monospace; color: var(--text-secondary); }
+  .node-search-results b { color: var(--text-primary); font-family: system-ui, sans-serif; }
 
   table { border-collapse: collapse; width: 100%; table-layout: fixed; }
   th, td {
@@ -205,6 +219,9 @@
   .modal-header h2 { font-size: 1.15rem; margin: 0; }
   .modal-section { margin-bottom: 18px; }
   .modal-section h3 { font-size: 0.85rem; color: var(--text-secondary); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .modal-section-compact { margin-bottom: 10px; }
+  #active-columns-row { align-items: center; margin-top: 6px; }
+  #active-columns { display: flex; flex-wrap: wrap; gap: 0; }
 
   .col-chip {
     display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem;
@@ -226,13 +243,30 @@
   .ip-filter-row button.active { outline: 2px solid var(--btn-blue-ink); outline-offset: -2px; }
   button.ping-btn {
     width: 15px; height: 15px; border-radius: 50%; padding: 0; margin: 0 auto; display: block;
-    border: 1px solid var(--border); background: var(--text-muted); opacity: 0.45;
+    border: 1px solid var(--border); background: var(--text-muted); opacity: 0.45; flex: none;
   }
   button.ping-btn:hover { transform: none; box-shadow: none; opacity: 0.8; }
-  button.ping-btn.pinging { background: #ec9a3c; opacity: 1; animation: ping-pulse 0.9s ease-in-out infinite; }
-  button.ping-btn.ok   { background: #3fb56d; opacity: 1; }
-  button.ping-btn.fail { background: #d4514f; opacity: 1; }
+  button.ping-btn.pinging     { background: #ec9a3c; opacity: 1; animation: ping-pulse 0.9s ease-in-out infinite; }
+  button.ping-btn.ping-green  { background: #3fb56d; opacity: 1; }
+  button.ping-btn.ping-orange { background: #ec9a3c; opacity: 1; }
+  button.ping-btn.ping-blue   { background: #3d82c9; opacity: 1; }
+  button.ping-btn.ping-red    { background: #d4514f; opacity: 1; }
   @keyframes ping-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+  td.ip-cell-with-ping { display: flex; align-items: center; gap: 6px; }
+  td.ip-cell-with-ping input { flex: 1; }
+
+  .ip-col-toggle-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .col-toggle-btn { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; font-size: 0.72rem; }
+  .col-toggle-btn svg { width: 12px; height: 12px; flex: none; }
+  .col-toggle-btn.hidden-col { opacity: 0.5; }
+
+  button.broom-btn {
+    width: 20px; height: 20px; padding: 2px; display: flex; align-items: center; justify-content: center;
+    border-radius: 6px; background: none; color: var(--text-muted); flex: none;
+  }
+  button.broom-btn svg { width: 14px; height: 14px; }
+  button.broom-btn:hover { color: var(--btn-pink-ink); background: var(--btn-pink); transform: none; box-shadow: none; }
+  table.ip-table .broom-col { width: 26px; text-align: center; }
 
   .catalog-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--gridline); font-size: 0.85rem; }
   .catalog-row:last-child { border-bottom: none; }
@@ -254,25 +288,28 @@
 <body>
 
 <div class="topbar">
-  <div>
+  <div class="title-row">
     <h1>IP Taula</h1>
+    <div id="version-badge">v1.0.0</div>
   </div>
   <div class="topbar-right">
     <button class="btn-neutral" id="undo-btn" style="display:none;" title="Desegin" disabled></button>
     <button class="btn-neutral" id="redo-btn" style="display:none;" title="Berregin" disabled></button>
+    <button class="btn-neutral" id="delete-mode-btn" style="display:none;" title="Ezabatzeko aukerak aktibatu"></button>
     <button class="btn-neutral" id="dark-toggle-btn" title="Modua aldatu"></button>
     <div id="auth-area"></div>
   </div>
 </div>
 
 <div class="search-row">
-  <input type="text" id="search-box" placeholder="Bilatu IP, izena, hostname...">
+  <div class="search-wrap">
+    <input type="text" id="search-box" placeholder="Bilatu IP, izena, hostname...">
+    <button type="button" class="btn-neutral" id="search-clear-btn" title="Bilaketa hustu">×</button>
+  </div>
 </div>
 
 <div id="status">Kargatzen...</div>
 <table id="grid" style="display:none;"></table>
-
-<div id="version-badge">v1.0.0</div>
 
 <button id="settings-btn" class="btn-neutral" style="display:none;" title="Ezarpenak">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
@@ -295,6 +332,8 @@ let isAuthenticated = false;
 let currentUsername = null;
 let currentRole = null;
 function isAdmin() { return isAuthenticated && currentRole === 'admin'; }
+let deleteModeEnabled = false; // ezabatzeko botoiak ezkutuan hasten dira segurtasunagatik
+function canDelete() { return isAdmin() && deleteModeEnabled; }
 const expandedGroups = new Set(); // agrupazio zabalduen idak, errenderizazioen artean irauten du
 let currentSearch = {matchedNodeIds: new Set(), expandIds: new Set(), ipMatches: new Map()};
 
@@ -302,6 +341,11 @@ const SUN_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const MOON_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>`;
 const UNDO_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H12"/></svg>`;
 const REDO_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 000 11H12"/></svg>`;
+const EYE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const EYE_OFF_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0112 19c-7 0-11-7-11-7a20.3 20.3 0 015.06-5.94M9.9 4.24A10.4 10.4 0 0112 4c7 0 11 7 11 7a20.3 20.3 0 01-2.68 3.68M14.12 14.12a3 3 0 11-4.24-4.24"/><path d="M1 1l22 22"/></svg>`;
+const BROOM_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21l4.5-4.5M13 13L21 5M13 13l-3.5 3.5a2.12 2.12 0 01-3-3L10 10M13 13L8 8l3-3 8 8-3 3z"/></svg>`;
+const LOCK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>`;
+const UNLOCK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.5-2.5"/></svg>`;
 document.getElementById('undo-btn').innerHTML = UNDO_ICON;
 document.getElementById('redo-btn').innerHTML = REDO_ICON;
 
@@ -327,6 +371,7 @@ async function loadAll() {
 
 async function refresh() {
   await loadAll();
+  renderDeleteModeButton();
   renderGrid();
   renderAuthUI();
   renderSettingsButton();
@@ -424,6 +469,22 @@ function renderAuthUI() {
     document.getElementById('login-btn').addEventListener('click', () => openLoginModal());
   }
 }
+
+/* ---------- ezabatzeko modua (segurtasunagatik ezkutuan hasten da) ---------- */
+
+function renderDeleteModeButton() {
+  const btn = document.getElementById('delete-mode-btn');
+  btn.style.display = isAdmin() ? 'flex' : 'none';
+  if (!isAdmin()) deleteModeEnabled = false;
+  btn.classList.toggle('armed', deleteModeEnabled);
+  btn.innerHTML = deleteModeEnabled ? UNLOCK_ICON : LOCK_ICON;
+  btn.title = deleteModeEnabled ? 'Ezabatzeko aukerak desaktibatu' : 'Ezabatzeko aukerak aktibatu';
+}
+document.getElementById('delete-mode-btn').addEventListener('click', () => {
+  deleteModeEnabled = !deleteModeEnabled;
+  renderDeleteModeButton();
+  renderGrid();
+});
 
 /* ---------- ezarpen-botoia (engranajea) eta bere menua ---------- */
 
@@ -575,10 +636,17 @@ let searchDebounce;
 document.getElementById('search-box').addEventListener('input', (e) => {
   clearTimeout(searchDebounce);
   const query = e.target.value;
+  document.getElementById('search-clear-btn').classList.toggle('show', query.length > 0);
   searchDebounce = setTimeout(() => {
     currentSearch = computeSearch(query);
     renderGrid();
   }, 200);
+});
+document.getElementById('search-clear-btn').addEventListener('click', () => {
+  const box = document.getElementById('search-box');
+  box.value = '';
+  box.dispatchEvent(new Event('input'));
+  box.focus();
 });
 
 /* ---------- nodoen alta/edizio formularioak ---------- */
@@ -707,16 +775,28 @@ function renderNode(node, site, role, siblings) {
 
   const body = document.createElement('div');
 
+  const matchedIps = currentSearch.ipMatches.get(node.id);
+  let searchResultsHtml = '';
+  if (matchedIps && matchedIps.size) {
+    const cols = node.columns || [];
+    const matchedEntries = (node.ip_entries || []).filter(e => matchedIps.has(e.ip));
+    searchResultsHtml = `<div class="node-search-results">${matchedEntries.map(e => {
+      const vals = cols.map(c => e.values[String(c.id)]).filter(Boolean).join(', ');
+      return `<div><b>${escapeHtml(e.ip)}</b>${vals ? ': ' + escapeHtml(vals) : ''}</div>`;
+    }).join('')}</div>`;
+  }
+
   body.innerHTML = `
     <div class="node-head">
       <span class="node-name">${escapeHtml(node.name)}</span>
       <span class="node-ctrl">
         ${isAdmin() && node.node_type === 'agrupacion' ? '<button class="btn-text" data-action="edit">editatu</button>' : ''}
-        ${isAdmin() ? '<button class="btn-text" data-action="delete">ezabatu</button>' : ''}
+        ${canDelete() ? '<button class="btn-text" data-action="delete">ezabatu</button>' : ''}
       </span>
     </div>
     ${node.description ? `<span class="node-desc">${escapeHtml(node.description)}</span>` : ''}
     ${node.node_type === 'rango' ? `<span class="node-cidr">${node.cidr}</span>` : ''}
+    ${searchResultsHtml}
   `;
   el.appendChild(body);
 
@@ -935,6 +1015,7 @@ async function openRangeModal(nodeId) {
   const modal = document.getElementById('range-modal');
   currentRangeModalNodeId = nodeId;
   ipTableFilter = 'all';
+  hiddenColumns = new Set();
   await renderRangeModal(nodeId);
   modal.showModal();
 }
@@ -962,8 +1043,7 @@ async function renderRangeModal(nodeId) {
       </span>
     </div>
 
-    <div class="modal-section">
-      <h3>Tartearen datuak</h3>
+    <div class="modal-section modal-section-compact">
       ${isAdmin() ? `
         <form class="inline-form" id="range-meta-form">
           <input name="name" value="${escapeAttr(node.name)}" placeholder="Izena" required>
@@ -974,22 +1054,20 @@ async function renderRangeModal(nodeId) {
       ` : `
         <p class="node-desc">${escapeHtml(node.cidr)}${node.description ? ' - ' + escapeHtml(node.description) : ''}</p>
       `}
-    </div>
-
-    <div class="modal-section">
-      <h3>Zutabe aktiboak</h3>
-      <div id="active-columns">
-        ${(node.columns || []).map(c => `<span class="col-chip">${escapeHtml(c.name)} ${isAdmin() ? `<button data-col="${c.id}" title="Zutabea kendu">×</button>` : ''}</span>`).join('') || '<span class="node-desc">Oraindik bat ere ez.</span>'}
+      <div class="inline-form" id="active-columns-row">
+        <div id="active-columns">
+          ${(node.columns || []).map(c => `<span class="col-chip">${escapeHtml(c.name)} ${isAdmin() ? `<button data-col="${c.id}" title="Zutabea kendu">×</button>` : ''}</span>`).join('') || '<span class="node-desc">Zutaberik ez.</span>'}
+        </div>
+        ${isAdmin() ? `
+          <form class="inline-form" id="add-column-form" style="margin:0; padding:0; border:none;">
+            <select name="column_id" ${availableCols.length ? '' : 'disabled'}>
+              ${availableCols.length ? availableCols.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('') : '<option>Zutabe gehiagorik ez</option>'}
+            </select>
+            <button type="submit" class="btn-green" ${availableCols.length ? '' : 'disabled'}>+ gehitu</button>
+            <button type="button" class="btn-text" id="open-columns-catalog">Zutabeak kudeatu...</button>
+          </form>
+        ` : ''}
       </div>
-      ${isAdmin() ? `
-        <form class="inline-form" id="add-column-form">
-          <select name="column_id" ${availableCols.length ? '' : 'disabled'}>
-            ${availableCols.length ? availableCols.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('') : '<option>Ez dago zutabe gehiago katalogoan</option>'}
-          </select>
-          <button type="submit" class="btn-green" ${availableCols.length ? '' : 'disabled'}>+ Tarteari gehitu</button>
-          <button type="button" class="btn-text" id="open-columns-catalog">Zutabeak kudeatu...</button>
-        </form>
-      ` : ''}
     </div>
 
     <div class="modal-section">
@@ -1069,25 +1147,27 @@ function hostsOf(cidr) {
 
 const IP_TABLE_MAX_ROWS = 1024;
 
-async function runPing(btn) {
-  btn.classList.remove('ok', 'fail');
+function pingTierClass(okCount) {
+  if (okCount <= 0) return 'ping-red';
+  if (okCount === 1) return 'ping-blue';
+  if (okCount < 6) return 'ping-orange';
+  return 'ping-green';
+}
+
+async function runPing(btn, ip) {
+  ip = ip || btn.dataset.ip;
+  if (!ip) return;
+  btn.classList.remove('ping-red', 'ping-blue', 'ping-orange', 'ping-green');
   btn.classList.add('pinging');
   btn.disabled = true;
   try {
-    const result = await api(`/ping/${btn.dataset.ip}`);
+    const result = await api(`/ping/${ip}`);
     btn.classList.remove('pinging');
-    if (result.reachable) {
-      btn.classList.add('ok');
-      btn.title = 'Erantzun du';
-    } else {
-      btn.classList.add('fail');
-      btn.title = result.rejected
-        ? 'Bidean ukatu dute (ez da helmugara iritsi)'
-        : 'Ez du erantzun (denbora-muga: ezin da bereizi helmugara iritsi eta erantzunik jaso ez den, ala bidean galdu den)';
-    }
+    btn.classList.add(pingTierClass(result.ok_count));
+    btn.title = `${result.ok_count}/6 erantzun` + (result.ok_count === 0 && result.rejected ? ' (bidean ukatu dute)' : '');
   } catch (err) {
     btn.classList.remove('pinging');
-    btn.classList.add('fail');
+    btn.classList.add('ping-red');
     btn.title = err.message;
   } finally {
     btn.disabled = false;
@@ -1101,21 +1181,59 @@ function buildHostRowEl(node, cols, ip, entry) {
   const tr = document.createElement('tr');
   tr.dataset.ip = ip;
   tr.className = entry ? 'ip-row-used' : 'ip-row-free';
+  const broomCell = isAuthenticated
+    ? `<td class="broom-col"><button type="button" class="broom-btn" title="Errenkada hutsik utzi (IPa askatu)">${BROOM_ICON}</button></td>`
+    : '';
   const pingCell = isAuthenticated
     ? `<td class="ping-col"><button type="button" class="ping-btn" data-ip="${ip}" title="Ping egin"></button></td>`
     : '';
   const cells = cols.map(c => {
     const val = entry ? (entry.values[String(c.id)] || '') : '';
-    return isAuthenticated
-      ? `<td><input data-col="${c.id}" value="${escapeAttr(val)}"></td>`
-      : `<td>${escapeHtml(val)}</td>`;
+    if (!isAuthenticated) return `<td>${escapeHtml(val)}</td>`;
+    if (c.is_ip) {
+      return `<td class="ip-cell-with-ping"><input data-col="${c.id}" value="${escapeAttr(val)}">`
+        + `<button type="button" class="ping-btn col-ping-btn" title="Ping egin balio honi"></button></td>`;
+    }
+    return `<td><input data-col="${c.id}" value="${escapeAttr(val)}"></td>`;
   }).join('');
-  tr.innerHTML = `<td>${ip}</td>${pingCell}${cells}`;
+  tr.innerHTML = `${broomCell}<td>${ip}</td>${pingCell}${cells}`;
 
   if (!isAuthenticated) return tr;
 
-  const pingBtn = tr.querySelector('button.ping-btn');
+  const pingBtn = tr.querySelector('button.ping-btn:not(.col-ping-btn)');
   if (pingBtn) pingBtn.addEventListener('click', () => runPing(pingBtn));
+
+  const broomBtn = tr.querySelector('button.broom-btn');
+  if (broomBtn) {
+    broomBtn.addEventListener('click', async () => {
+      if (!tr.classList.contains('ip-row-used')) return;
+      broomBtn.disabled = true;
+      try {
+        for (const input of tr.querySelectorAll('input[data-col]')) {
+          if (input.value.trim() !== '') {
+            await api(`/nodes/${node.id}/ip-values`, {
+              method: 'PUT',
+              body: JSON.stringify({ip, column_id: Number(input.dataset.col), value: null}),
+            });
+            input.value = '';
+          }
+        }
+        tr.classList.remove('ip-row-used');
+        tr.classList.add('ip-row-free');
+        loadAll();
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        broomBtn.disabled = false;
+      }
+    });
+  }
+
+  tr.querySelectorAll('td.ip-cell-with-ping').forEach(td => {
+    const input = td.querySelector('input');
+    const colPingBtn = td.querySelector('.col-ping-btn');
+    colPingBtn.addEventListener('click', () => runPing(colPingBtn, input.value.trim()));
+  });
 
   tr.querySelectorAll('input[data-col]').forEach(input => {
     input.addEventListener('blur', async () => {
@@ -1161,10 +1279,12 @@ function buildFreeGroupRowEl(node, cols, groupHosts, totalCols) {
   return tr;
 }
 
+let hiddenColumns = new Set();
+
 function renderIpTable(node) {
   const wrap = document.getElementById('ip-table-wrap');
-  const cols = node.columns || [];
-  if (!cols.length) {
+  const allCols = node.columns || [];
+  if (!allCols.length) {
     wrap.innerHTML = '<span class="node-desc">Gehitu gutxienez zutabe bat IP bakoitzeko datuak erregistratzeko.</span>';
     return;
   }
@@ -1177,6 +1297,25 @@ function renderIpTable(node) {
   (node.ip_entries || []).forEach(e => { entryByIp[e.ip] = e; });
 
   wrap.innerHTML = '';
+
+  if (allCols.length > 1) {
+    const colToggleRow = document.createElement('div');
+    colToggleRow.className = 'ip-col-toggle-row';
+    colToggleRow.innerHTML = allCols.map(c => {
+      const hidden = hiddenColumns.has(c.id);
+      return `<button type="button" class="btn-neutral col-toggle-btn${hidden ? ' hidden-col' : ''}" data-col-id="${c.id}" title="${hidden ? 'Zutabea erakutsi' : 'Zutabea ezkutatu'}">${hidden ? EYE_OFF_ICON : EYE_ICON} ${escapeHtml(c.name)}</button>`;
+    }).join('');
+    colToggleRow.querySelectorAll('button[data-col-id]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = Number(btn.dataset.colId);
+        if (hiddenColumns.has(id)) hiddenColumns.delete(id); else hiddenColumns.add(id);
+        renderIpTable(node);
+      });
+    });
+    wrap.appendChild(colToggleRow);
+  }
+
+  const cols = allCols.filter(c => !hiddenColumns.has(c.id));
 
   const filterRow = document.createElement('div');
   filterRow.className = 'ip-filter-row';
@@ -1200,11 +1339,18 @@ function renderIpTable(node) {
     wrap.appendChild(note);
   }
 
+  if (!cols.length) {
+    wrap.appendChild(Object.assign(document.createElement('p'), {
+      className: 'node-desc', textContent: 'Zutabe guztiak ezkutatuta daude.',
+    }));
+    return;
+  }
+
   const table = document.createElement('table');
   table.className = 'ip-table';
-  const totalCols = 1 + (isAuthenticated ? 1 : 0) + cols.length;
+  const totalCols = 1 + (isAuthenticated ? 2 : 0) + cols.length;
   const headTr = document.createElement('tr');
-  headTr.innerHTML = `<th>IP</th>${isAuthenticated ? '<th class="ping-col">Ping</th>' : ''}${cols.map(c => `<th>${escapeHtml(c.name)}</th>`).join('')}`;
+  headTr.innerHTML = `${isAuthenticated ? '<th class="broom-col"></th>' : ''}<th>IP</th>${isAuthenticated ? '<th class="ping-col">Ping</th>' : ''}${cols.map(c => `<th>${escapeHtml(c.name)}</th>`).join('')}`;
   table.appendChild(headTr);
 
   let i = 0;
@@ -1248,10 +1394,13 @@ async function renderColumnsModal() {
       <button class="btn-neutral" id="close-columns-modal">Itxi</button>
     </div>
     <div id="catalog-list">
-      ${COLUMNS.map(c => `<div class="catalog-row"><span>${escapeHtml(c.name)}</span><button class="btn-text" data-col="${c.id}">ezabatu</button></div>`).join('') || '<span class="node-desc">Oraindik zutaberik ez.</span>'}
+      ${COLUMNS.map(c => `<div class="catalog-row"><span>${escapeHtml(c.name)}${c.is_ip ? ' <span class="col-chip" style="margin:0;">Ping</span>' : ''}</span><button class="btn-text" data-col="${c.id}">ezabatu</button></div>`).join('') || '<span class="node-desc">Oraindik zutaberik ez.</span>'}
     </div>
     <form class="inline-form" id="new-column-form" style="margin-top:12px;">
       <input name="name" placeholder="Zutabearen izena (adib. Hostname, MAC...)" required>
+      <label style="display:flex; align-items:center; gap:5px; font-size:0.78rem;">
+        <input type="checkbox" name="is_ip" style="width:auto;"> IP zutabea (ping-a gaitu)
+      </label>
       <button type="submit" class="btn-green">+ Zutabea sortu</button>
     </form>
     <div class="form-error" id="col-form-error"></div>
@@ -1270,7 +1419,7 @@ async function renderColumnsModal() {
     e.preventDefault();
     document.getElementById('col-form-error').textContent = '';
     try {
-      await api('/columns', {method: 'POST', body: JSON.stringify({name: e.target.name.value})});
+      await api('/columns', {method: 'POST', body: JSON.stringify({name: e.target.name.value, is_ip: e.target.is_ip.checked})});
       await afterCatalogChange();
     } catch (err) {
       document.getElementById('col-form-error').textContent = err.message;

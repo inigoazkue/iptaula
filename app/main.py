@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS nodes (
 CREATE TABLE IF NOT EXISTS columns_catalog (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
+    is_ip INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -217,6 +218,12 @@ def migrate_schema(conn):
     if node_cols and "position" not in node_cols:
         conn.execute("ALTER TABLE nodes ADD COLUMN position INTEGER NOT NULL DEFAULT 0")
 
+    # `is_ip` es nueva: marca las columnas del catálogo que guardan una IP,
+    # para poder ofrecer un botón de ping también sobre esos valores.
+    col_cols = [r["name"] for r in conn.execute("PRAGMA table_info(columns_catalog)")]
+    if col_cols and "is_ip" not in col_cols:
+        conn.execute("ALTER TABLE columns_catalog ADD COLUMN is_ip INTEGER NOT NULL DEFAULT 0")
+
 
 def init_db():
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
@@ -291,6 +298,7 @@ class MoveIn(BaseModel):
 
 class ColumnIn(BaseModel):
     name: str
+    is_ip: bool = False
 
 
 class RangeColumnIn(BaseModel):
@@ -463,6 +471,9 @@ PING_UNREACHABLE_MARKERS = (
 )
 
 
+PING_RECEIVED_RE = re.compile(r"(\d+)\s+received", re.I)
+
+
 @app.get("/api/ping/{ip}")
 def ping_ip(ip: str, _auth=Depends(require_auth)):
     try:
@@ -475,12 +486,12 @@ def ping_ip(ip: str, _auth=Depends(require_auth)):
             capture_output=True, text=True, timeout=15,
         )
         output = result.stdout + result.stderr
-        reachable = result.returncode == 0
     except subprocess.TimeoutExpired:
         output = ""
-        reachable = False
+    match = PING_RECEIVED_RE.search(output)
+    ok_count = int(match.group(1)) if match else 0
     rejected = any(marker in output for marker in PING_UNREACHABLE_MARKERS)
-    return {"reachable": reachable, "rejected": rejected, "detail": output[-1000:]}
+    return {"ok_count": ok_count, "rejected": rejected, "detail": output[-1000:]}
 
 
 # --- árbol completo (sedes, roles y nodos con sus IPs/columnas) ---
@@ -494,12 +505,12 @@ def get_tree():
 
         columns_by_node = {}
         for rc in conn.execute(
-            "SELECT rc.node_id AS node_id, c.id AS column_id, c.name AS name "
+            "SELECT rc.node_id AS node_id, c.id AS column_id, c.name AS name, c.is_ip AS is_ip "
             "FROM range_columns rc JOIN columns_catalog c ON c.id = rc.column_id "
             "ORDER BY c.name"
         ):
             columns_by_node.setdefault(rc["node_id"], []).append(
-                {"id": rc["column_id"], "name": rc["name"]}
+                {"id": rc["column_id"], "name": rc["name"], "is_ip": bool(rc["is_ip"])}
             )
 
         values_by_entry = {}
@@ -746,8 +757,10 @@ def create_column(col: ColumnIn, _auth=Depends(require_admin)):
     with get_db() as conn:
         if conn.execute("SELECT id FROM columns_catalog WHERE name=?", (name,)).fetchone():
             raise HTTPException(409, "Badago izen hori duen zutabe bat jada")
-        cur = conn.execute("INSERT INTO columns_catalog (name) VALUES (?)", (name,))
-        return {"id": cur.lastrowid, "name": name}
+        cur = conn.execute(
+            "INSERT INTO columns_catalog (name, is_ip) VALUES (?, ?)", (name, int(col.is_ip))
+        )
+        return {"id": cur.lastrowid, "name": name, "is_ip": col.is_ip}
 
 
 @app.delete("/api/columns/{column_id}")
