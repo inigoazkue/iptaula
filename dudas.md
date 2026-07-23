@@ -2,6 +2,67 @@
 
 Registro de los casos dudosos encontrados al volcar cada página del sistema antiguo (`http://10.114.10.166/IPs/`) a IP Taula, con la decisión tomada. Pensado para enseñárselo al responsable del área afectada, por si hubiera que corregir algo en el futuro.
 
+## dmz_192_168.htm → SIN PROCESAR, pendiente de aclarar con alguien del área
+
+Página distinta a todas las demás: no sigue el formato IP/Hostname/Oharrak habitual, mezcla rangos, sub-elementos con prefijo `---`, IPs públicas junto a privadas y grupos con iniciales (`AUT`, `EDK`) sin explicar qué son. No se ha cargado nada de esta página en IP Taula — se deja aquí el contenido íntegro, tal cual viene en la tabla original, para que se pueda enseñar a alguien del área y aclarar qué significa antes de intentar meterlo en ningún sitio.
+
+Título del documento original: `DMZ BILBAO 192.168.X.X`
+
+Cabecera suelta antes de la tabla principal:
+
+| | | | |
+|---|---|---|---|
+| | 192.168.1.x | | switch |
+| | 192.168.x.2 | | Default gateway |
+
+Tabla principal (columnas tal cual en el original: primera columna con "AUT"/"EDK" solo en la cabecera de cada bloque, luego RANGO/EQUIPO, IP, y una columna final con notas o IPs adicionales):
+
+| Bloque | Rango/Equipo | IP | Notas / IP adicional |
+|---|---|---|---|
+| AUT | RANGO / EQUIPO (cabecera) | | |
+| | AUTOMA | 192.168.11.x | |
+| | --- AU_FORTA | 192.168.11.10 | 192.168.200.112 |
+| | --- AUWEB | 192.168.11.13 | |
+| | INTEGRA PARTNERS | 192.168.12.x | |
+| | --- AUPARTNER | 192.168.12.20 | |
+| | -- Portatil Irusoin | 192.168.12.3 | IRU-P8B1222A |
+| | INTEGRA FORTA | 192.168.201.x | |
+| | INTERNET | 192.168.10.x | |
+| | --- REUTERS | 192.168.10.13 | 212.55.28.103, 195.77.243.73 |
+| | --- APTN | 192.168.10.14 | 212.55.28.104, 195.77.243.74 |
+| | --- UPLOADER1 | 192.168.10.15 | 212.55.28.105, 195.77.243.75 |
+| | --- UPLOADER2 | 192.168.10.16 | 212.55.28.106, 195.77.243.76 |
+| | --- ROCKET | 192.168.10.17 | 212.55.28.107, 195.77.243.77 |
+| | --- AUWEB | 192.168.10.18 | 212.55.28.108, 195.77.243.78 |
+| | Abertis | 192.168.10.19 | 212.55.28.109, 195.77.243.79 |
+| | AFP | 192.168.10.22 | 212.55.28.112, 195.77.243.82 |
+| | Artzai ?? | 192.168.10.23 | 212.55.28.113, 195.77.243.83 |
+| EDK | RANGO / EQUIPO (cabecera) | | |
+| | FORTA | 192.168.21.x | |
+| | --- PTP1 | 192.168.21.110 | A FORTA 192.168.200.111 |
+| | --- PTP2 | 192.168.21.111 | |
+| | --- AU_FORTA | 192.168.21.10 | 192.168.200.112 |
+| | REUTERS | 192.168.22.x | |
+| | --- REUTERS CON VIRTUAL | 192.168.22.9 | Linux 192.168.73.20 192.168.73.1 |
+| | FTPs | 192.168.23.x | |
+| | --- AUWEB | 192.168.23.13 | |
+| | -- SLES VIRT1 XEN | 192.168.23.25 | |
+| | --- dmz-uploader02 | 192.168.23.15 | |
+| | -- SLES VIRT2 XEN | 192.168.23.20 | |
+| | --- dmz-uploader01 | 192.168.23.21 | |
+| | M4F | 192.168.24.x | |
+| | --- FTP m4f | 192.168.24.15 | |
+| | IRUSOIN | 192.168.25.x | |
+| | --- AUPARTNER | 192.168.25.20 | |
+| | --- irusoin ftp srv | 192.168.25.15 | |
+| | --- Promos | 192.168.25.150 | |
+| | --- Portatil | 192.168.25.19 | |
+
+**Cosas que no se entienden y habría que preguntar:**
+- Qué significan las siglas `AUT` y `EDK` que encabezan cada bloque (¿dos sedes o sistemas distintos, Bilbo y Miramón quizás, dado que se repiten los mismos rangos/nombres en ambos bloques — p.ej. `AU_FORTA` en `192.168.11.10` bajo AUT y también en `192.168.21.10` bajo EDK?).
+- Si las IPs de la última columna (`212.55.28.x`, `195.77.243.x`) son direcciones públicas asociadas (NAT) a cada equipo, y qué relación exacta tienen.
+- Si esto debe representarse en IP Taula como rangos normales, o si por su naturaleza (DMZ con NAT/dos sedes mezcladas) necesita un modelo distinto.
+
 ## IPs_10_114_159.htm → grupo "Sistema Virtual" (Bilbo/Gestioa)
 
 1. **IP duplicada `10.114.159.253`**: el documento original tiene dos nombres para la misma IP, `Plantilla win2003-64` y `Plantilla win2008-64`. Se cargó `Plantilla win2003-64` como nombre principal y se anotó `Plantilla win2008-64` en Oharrak. **Pendiente de confirmar cuál de las dos plantillas sigue en uso, o si hay que moverla a otra IP.**
