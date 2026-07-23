@@ -12,6 +12,7 @@ Uso:
 """
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -120,8 +121,24 @@ def ip_exists(address, vrf_name):
     return bool(api_get("ipam/ip-addresses", params))
 
 
+DNS_NAME_RE = re.compile(r"^[A-Za-z0-9*_.-]+$")
+
+
 def looks_like_hostname(label):
-    return bool(label) and " " not in label and "/" not in label and len(label) <= 63
+    return bool(label) and len(label) <= 63 and bool(DNS_NAME_RE.match(label))
+
+
+_MIGRATION_TAG_ENSURED = False
+
+
+def ensure_migration_tag():
+    global _MIGRATION_TAG_ENSURED
+    if _MIGRATION_TAG_ENSURED:
+        return
+    if not api_get("extras/tags", {"name": "migracion-legacy"}):
+        api_post("extras/tags", {"name": "migracion-legacy", "slug": "migracion-legacy"})
+        print("  tag creado: migracion-legacy")
+    _MIGRATION_TAG_ENSURED = True
 
 
 def create_ip(ip, vrf_name, label, source_page):
@@ -144,6 +161,7 @@ def create_ip(ip, vrf_name, label, source_page):
 
 
 def run():
+    ensure_migration_tag()
     data = json.loads(DATA_FILE.read_text(encoding="utf-8"))
     records = data["records"]
 
