@@ -218,7 +218,13 @@
   table.ip-table input { width: 100%; font-size: 0.78rem; padding: 4px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface-1); color: var(--text-primary); }
   table.ip-table tr.ip-row-free  { background: var(--row-free); }
   table.ip-table tr.ip-row-used  { background: var(--row-used); }
+  table.ip-table tr.ip-row-group { cursor: pointer; }
+  table.ip-table tr.ip-row-group td { text-align: center; font-style: italic; color: var(--text-secondary); }
+  table.ip-table tr.ip-row-group:hover td { color: var(--text-primary); }
   table.ip-table .ping-col { width: 44px; text-align: center; white-space: nowrap; }
+  .ip-filter-row { display: flex; gap: 6px; margin-bottom: 8px; }
+  .ip-filter-row button { padding: 4px 10px; font-size: 0.75rem; }
+  .ip-filter-row button.active { outline: 2px solid var(--btn-blue-ink); outline-offset: -2px; }
   button.ping-btn {
     width: 15px; height: 15px; border-radius: 50%; padding: 0; margin: 0 auto; display: block;
     border: 1px solid var(--border); background: var(--text-muted); opacity: 0.45;
@@ -930,6 +936,7 @@ let currentRangeModalNodeId = null;
 async function openRangeModal(nodeId) {
   const modal = document.getElementById('range-modal');
   currentRangeModalNodeId = nodeId;
+  ipTableFilter = 'all';
   await renderRangeModal(nodeId);
   modal.showModal();
 }
@@ -1089,60 +1096,31 @@ async function runPing(btn) {
   }
 }
 
-function renderIpTable(node) {
-  const wrap = document.getElementById('ip-table-wrap');
-  const cols = node.columns || [];
-  if (!cols.length) {
-    wrap.innerHTML = '<span class="node-desc">Gehitu gutxienez zutabe bat IP bakoitzeko datuak erregistratzeko.</span>';
-    return;
-  }
+const MIN_FREE_RUN = 3; // gutxienez zenbat IP libre segidan behar diren taldean bildu eta tolesteko
+let ipTableFilter = 'all'; // 'all' | 'used' | 'free'
 
-  const allHosts = hostsOf(node.cidr);
-  const truncated = allHosts.length > IP_TABLE_MAX_ROWS;
-  const hosts = truncated ? allHosts.slice(0, IP_TABLE_MAX_ROWS) : allHosts;
+function buildHostRowEl(node, cols, ip, entry) {
+  const tr = document.createElement('tr');
+  tr.dataset.ip = ip;
+  tr.className = entry ? 'ip-row-used' : 'ip-row-free';
+  const pingCell = isAuthenticated
+    ? `<td class="ping-col"><button type="button" class="ping-btn" data-ip="${ip}" title="Ping egin"></button></td>`
+    : '';
+  const cells = cols.map(c => {
+    const val = entry ? (entry.values[String(c.id)] || '') : '';
+    return isAuthenticated
+      ? `<td><input data-col="${c.id}" value="${escapeAttr(val)}"></td>`
+      : `<td>${escapeHtml(val)}</td>`;
+  }).join('');
+  tr.innerHTML = `<td>${ip}</td>${pingCell}${cells}`;
 
-  const entryByIp = {};
-  (node.ip_entries || []).forEach(e => { entryByIp[e.ip] = e; });
+  if (!isAuthenticated) return tr;
 
-  wrap.innerHTML = '';
-  if (truncated) {
-    const note = document.createElement('p');
-    note.className = 'node-desc';
-    note.style.marginBottom = '6px';
-    note.textContent = `Tarte oso handia: lehen ${IP_TABLE_MAX_ROWS} IPak erakusten dira ${allHosts.length}-tik.`;
-    wrap.appendChild(note);
-  }
+  const pingBtn = tr.querySelector('button.ping-btn');
+  if (pingBtn) pingBtn.addEventListener('click', () => runPing(pingBtn));
 
-  const table = document.createElement('table');
-  table.className = 'ip-table';
-  table.innerHTML = `
-    <tr><th>IP</th>${isAuthenticated ? '<th class="ping-col">Ping</th>' : ''}${cols.map(c => `<th>${escapeHtml(c.name)}</th>`).join('')}</tr>
-    ${hosts.map(ip => {
-      const entry = entryByIp[ip];
-      const cells = cols.map(c => {
-        const val = entry ? (entry.values[String(c.id)] || '') : '';
-        return isAuthenticated
-          ? `<td><input data-col="${c.id}" value="${escapeAttr(val)}"></td>`
-          : `<td>${escapeHtml(val)}</td>`;
-      }).join('');
-      const pingCell = isAuthenticated
-        ? `<td class="ping-col"><button type="button" class="ping-btn" data-ip="${ip}" title="Ping egin"></button></td>`
-        : '';
-      return `<tr data-ip="${ip}" class="${entry ? 'ip-row-used' : 'ip-row-free'}"><td>${ip}</td>${pingCell}${cells}</tr>`;
-    }).join('')}
-  `;
-  wrap.appendChild(table);
-
-  if (!isAuthenticated) return;
-
-  table.querySelectorAll('button.ping-btn').forEach(btn => {
-    btn.addEventListener('click', () => runPing(btn));
-  });
-
-  table.querySelectorAll('input[data-col]').forEach(input => {
+  tr.querySelectorAll('input[data-col]').forEach(input => {
     input.addEventListener('blur', async () => {
-      const tr = input.closest('tr');
-      const ip = tr.dataset.ip;
       const columnId = Number(input.dataset.col);
       input.disabled = true;
       try {
@@ -1166,6 +1144,95 @@ function renderIpTable(node) {
       }
     });
   });
+  return tr;
+}
+
+function buildFreeGroupRowEl(node, cols, groupHosts, totalCols) {
+  const tr = document.createElement('tr');
+  tr.className = 'ip-row-free ip-row-group';
+  const td = document.createElement('td');
+  td.colSpan = totalCols;
+  const first = groupHosts[0], last = groupHosts[groupHosts.length - 1];
+  td.textContent = `${groupHosts.length} IP libre (${first} - ${last}) — klikatu zabaltzeko`;
+  tr.appendChild(td);
+  tr.addEventListener('click', () => {
+    const frag = document.createDocumentFragment();
+    groupHosts.forEach(ip => frag.appendChild(buildHostRowEl(node, cols, ip, null)));
+    tr.replaceWith(frag);
+  });
+  return tr;
+}
+
+function renderIpTable(node) {
+  const wrap = document.getElementById('ip-table-wrap');
+  const cols = node.columns || [];
+  if (!cols.length) {
+    wrap.innerHTML = '<span class="node-desc">Gehitu gutxienez zutabe bat IP bakoitzeko datuak erregistratzeko.</span>';
+    return;
+  }
+
+  const allHosts = hostsOf(node.cidr);
+  const truncated = allHosts.length > IP_TABLE_MAX_ROWS;
+  const hosts = truncated ? allHosts.slice(0, IP_TABLE_MAX_ROWS) : allHosts;
+
+  const entryByIp = {};
+  (node.ip_entries || []).forEach(e => { entryByIp[e.ip] = e; });
+
+  wrap.innerHTML = '';
+
+  const filterRow = document.createElement('div');
+  filterRow.className = 'ip-filter-row';
+  const FILTERS = [['all', 'Guztiak'], ['used', 'Erabilita'], ['free', 'Libre']];
+  filterRow.innerHTML = FILTERS.map(([key, label]) =>
+    `<button type="button" class="btn-neutral${ipTableFilter === key ? ' active' : ''}" data-filter="${key}">${label}</button>`
+  ).join('');
+  filterRow.querySelectorAll('button[data-filter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      ipTableFilter = btn.dataset.filter;
+      renderIpTable(node);
+    });
+  });
+  wrap.appendChild(filterRow);
+
+  if (truncated) {
+    const note = document.createElement('p');
+    note.className = 'node-desc';
+    note.style.marginBottom = '6px';
+    note.textContent = `Tarte oso handia: lehen ${IP_TABLE_MAX_ROWS} IPak erakusten dira ${allHosts.length}-tik.`;
+    wrap.appendChild(note);
+  }
+
+  const table = document.createElement('table');
+  table.className = 'ip-table';
+  const totalCols = 1 + (isAuthenticated ? 1 : 0) + cols.length;
+  const headTr = document.createElement('tr');
+  headTr.innerHTML = `<th>IP</th>${isAuthenticated ? '<th class="ping-col">Ping</th>' : ''}${cols.map(c => `<th>${escapeHtml(c.name)}</th>`).join('')}`;
+  table.appendChild(headTr);
+
+  let i = 0;
+  while (i < hosts.length) {
+    const ip = hosts[i];
+    const entry = entryByIp[ip];
+
+    if (entry) {
+      if (ipTableFilter !== 'free') table.appendChild(buildHostRowEl(node, cols, ip, entry));
+      i++;
+      continue;
+    }
+
+    let j = i;
+    while (j < hosts.length && !entryByIp[hosts[j]]) j++;
+    const run = hosts.slice(i, j);
+    if (ipTableFilter !== 'used') {
+      if (run.length >= MIN_FREE_RUN) {
+        table.appendChild(buildFreeGroupRowEl(node, cols, run, totalCols));
+      } else {
+        run.forEach(freeIp => table.appendChild(buildHostRowEl(node, cols, freeIp, null)));
+      }
+    }
+    i = j;
+  }
+  wrap.appendChild(table);
 }
 
 /* ---------- zutabeen katalogoaren modala ---------- */
