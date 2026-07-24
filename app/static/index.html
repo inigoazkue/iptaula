@@ -251,9 +251,12 @@
   table.ip-table tr.ip-row-group { cursor: pointer; }
   table.ip-table tr.ip-row-group td { text-align: center; font-style: italic; color: var(--text-secondary); }
   table.ip-table tr.ip-row-group:hover td { color: var(--text-primary); }
-  table.ip-table .ping-col { width: 26px; text-align: center; white-space: nowrap; }
-  table.ip-table .resolve-col { width: 190px; }
+  table.ip-table .ping-col { text-align: center; white-space: nowrap; }
   table.ip-table th.resolve-col, table.ip-table th.ping-col { text-align: center; }
+  col.col-broom { width: 26px; }
+  col.col-ip { width: 115px; }
+  col.col-ping { width: 26px; }
+  col.col-resolve { width: 190px; }
   table.ip-table th.diag-group { text-align: center; }
   .header-action-btn { color: inherit; font-weight: 700; padding: 0; text-decoration-color: transparent; }
   .header-action-btn:hover { text-decoration-color: currentColor; color: var(--btn-blue-ink); }
@@ -278,8 +281,9 @@
   button.ping-btn.ping-blue   { background: #3d82c9; opacity: 1; }
   button.ping-btn.ping-red    { background: #d4514f; opacity: 1; }
   @keyframes ping-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
-  td.cell-with-btn { display: flex; align-items: center; gap: 6px; }
-  td.cell-with-btn input, td.cell-with-btn span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  td.cell-with-btn { display: flex; align-items: center; gap: 6px; width: 100%; box-sizing: border-box; }
+  td.cell-with-btn input, td.cell-with-btn span { flex: 1; min-width: 0; width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  td.cell-with-btn input { margin: 0; }
 
   .ip-col-toggle-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
   .col-toggle-btn { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; font-size: 0.72rem; }
@@ -293,7 +297,7 @@
   }
   button.broom-btn svg { width: 14px; height: 14px; }
   button.broom-btn:hover { color: var(--btn-pink-ink); background: var(--btn-pink); transform: translate(-50%, -50%); box-shadow: none; }
-  table.ip-table .broom-col { width: 26px; text-align: center; position: relative; }
+  table.ip-table .broom-col { text-align: center; position: relative; }
 
   th.resizable-col { position: relative; }
   .col-resize-handle {
@@ -1075,6 +1079,8 @@ async function openRangeModal(nodeId) {
   currentRangeModalNodeId = nodeId;
   ipTableFilter = 'all';
   hiddenColumns = new Set();
+  modal.style.width = '';
+  modalBaseWidth = null;
   await renderRangeModal(nodeId);
   modal.showModal();
 }
@@ -1277,6 +1283,40 @@ async function runResolve(btn, ip, input, onSaved, resultSpan, assignBtn) {
 const MIN_FREE_RUN = 3; // gutxienez zenbat IP libre segidan behar diren taldean bildu eta tolesteko
 let ipTableFilter = 'all'; // 'all' | 'used' | 'free'
 let resizingColumn = false; // zutabe bat ensanchatzen ari denean, modala ez itxi kanpoan klik eginda
+let modalBaseWidth = null; // modala lehen aldiz irekitzean duen zabalera, zutabeak estutzean gutxienez horreraino itzultzeko
+
+function makeResizeHandle(col) {
+  const handle = document.createElement('div');
+  handle.className = 'col-resize-handle';
+  handle.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const dialog = document.getElementById('range-modal');
+    if (modalBaseWidth === null) modalBaseWidth = dialog.offsetWidth;
+    handle.classList.add('resizing');
+    resizingColumn = true;
+    const startX = e.clientX;
+    const startWidth = col.offsetWidth || col.getBoundingClientRect().width;
+    const startDialogWidth = dialog.offsetWidth;
+    function onMove(ev) {
+      const delta = ev.clientX - startX;
+      const newWidth = Math.max(30, startWidth + delta);
+      col.style.width = newWidth + 'px';
+      // modala bera ere egokitu: zabaldu gehiago behar denean, eta
+      // estutu berriro baina jatorrizko zabalera baino gehiago ez
+      const desired = startDialogWidth + delta;
+      dialog.style.width = Math.max(modalBaseWidth, Math.min(window.innerWidth * 0.95, desired)) + 'px';
+    }
+    function onUp() {
+      handle.classList.remove('resizing');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      setTimeout(() => { resizingColumn = false; }, 0);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+  return handle;
+}
 
 function buildHostRowEl(node, cols, ip, entry) {
   const tr = document.createElement('tr');
@@ -1487,24 +1527,54 @@ function renderIpTable(node) {
   scrollWrap.className = 'ip-table-scroll';
   const table = document.createElement('table');
   table.className = 'ip-table';
-  const totalCols = 2 + (isAuthenticated ? 1 : 0) + cols.length;
+  const totalCols = (isAuthenticated ? 1 : 0) + 3 + cols.length;
+
+  // <col> bidez ematen zaie zabalera zutabeei, ez th/td banakoei: horrela
+  // "table-layout:fixed"-ek argi daki zutabe bakoitzaren zabalera zein den
+  // nahiz eta lehen errenkadan colspan bat egon (Ping/Host.Res. gainean).
+  const colgroup = document.createElement('colgroup');
+  const colBroom = isAuthenticated ? document.createElement('col') : null;
+  if (colBroom) { colBroom.className = 'col-broom'; colgroup.appendChild(colBroom); }
+  const colIp = document.createElement('col');
+  colIp.className = 'col-ip';
+  colgroup.appendChild(colIp);
+  const colPing = document.createElement('col');
+  colPing.className = 'col-ping';
+  colgroup.appendChild(colPing);
+  const colResolve = document.createElement('col');
+  colResolve.className = 'col-resolve';
+  colgroup.appendChild(colResolve);
+  const colsData = cols.map(() => {
+    const col = document.createElement('col');
+    colgroup.appendChild(col);
+    return col;
+  });
+  table.appendChild(colgroup);
 
   const groupTr = document.createElement('tr');
-  groupTr.innerHTML = `${isAuthenticated ? '<th class="broom-col" rowspan="2"></th>' : ''}<th rowspan="2">IP</th><th class="diag-group" colspan="2">IP honen diagnostikoa</th>`;
+  groupTr.innerHTML = `${isAuthenticated ? '<th rowspan="2"></th>' : ''}<th rowspan="2">IP</th><th class="diag-group" colspan="2">IP honen diagnostikoa</th>`;
   // las columnas de datos ocupan las dos filas de cabecera (rowspan) para no partir su titulo
-  cols.forEach((c) => {
+  cols.forEach((c, idx) => {
     const th = document.createElement('th');
     th.rowSpan = 2;
     th.className = 'resizable-col';
     th.textContent = c.name;
-    th.appendChild(Object.assign(document.createElement('div'), {className: 'col-resize-handle'}));
+    th.appendChild(makeResizeHandle(colsData[idx]));
     groupTr.appendChild(th);
   });
   table.appendChild(groupTr);
 
   const headTr = document.createElement('tr');
-  headTr.innerHTML = `<th class="ping-col"><button type="button" class="btn-text header-action-btn" id="ping-all-btn" title="Errenkada guztiei (libre eta erabilita) ping egin">Ping</button></th>`
-    + `<th class="resolve-col"><button type="button" class="btn-text header-action-btn" id="resolve-all-btn" title="Errenkada guztien (libre eta erabilita) Hostname-a ebatzi">Host.Res.</button></th>`;
+  const pingTh = document.createElement('th');
+  pingTh.className = 'ping-col';
+  pingTh.innerHTML = `<button type="button" class="btn-text header-action-btn" id="ping-all-btn" title="Errenkada guztiei (libre eta erabilita) ping egin">Ping</button>`;
+  pingTh.appendChild(makeResizeHandle(colPing));
+  const resolveTh = document.createElement('th');
+  resolveTh.className = 'resolve-col';
+  resolveTh.innerHTML = `<button type="button" class="btn-text header-action-btn" id="resolve-all-btn" title="Errenkada guztien (libre eta erabilita) Hostname-a ebatzi">Host.Res.</button>`;
+  resolveTh.appendChild(makeResizeHandle(colResolve));
+  headTr.appendChild(pingTh);
+  headTr.appendChild(resolveTh);
   table.appendChild(headTr);
 
   function expandAllFreeGroups() {
@@ -1532,35 +1602,6 @@ function renderIpTable(node) {
     if (!items.length) return;
     if (items.length > 60 && !confirm(`${items.length} IPren Hostname-a ebatziko da, denbora har dezake. Jarraitu?`)) return;
     await Promise.all(items.map(x => runResolve(x.btn, x.ip, null, null, x.resultSpan, x.assignBtn)));
-  });
-
-  table.querySelectorAll('.col-resize-handle').forEach(handle => {
-    handle.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      const th = handle.parentElement;
-      const dialog = document.getElementById('range-modal');
-      handle.classList.add('resizing');
-      resizingColumn = true;
-      const startX = e.clientX;
-      const startWidth = th.offsetWidth;
-      const startDialogWidth = dialog.offsetWidth;
-      function onMove(ev) {
-        const delta = ev.clientX - startX;
-        th.style.width = Math.max(50, startWidth + delta) + 'px';
-        // modala bera ere zabaldu, bestela zutabe bat zabaltzeak besteak estutzen ditu
-        if (delta > 0) {
-          dialog.style.width = Math.min(window.innerWidth * 0.95, startDialogWidth + delta) + 'px';
-        }
-      }
-      function onUp() {
-        handle.classList.remove('resizing');
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        setTimeout(() => { resizingColumn = false; }, 0);
-      }
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-    });
   });
 
   let i = 0;
