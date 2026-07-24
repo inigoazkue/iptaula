@@ -28,3 +28,4 @@ bilbao_10_114.htm,Biltegiratzea eta DMZ,bilbo,gestioa,Bilbao Automatización,10.
 bilbao_10_114.htm,Erlojua - Radio Euskadi,bilbo,gestioa,(fuera de grupo - independiente),10.111.0.0/24,"IP=Hostname; Oharrak",41,"cargado, pendiente de revisar (ver notas)"
 bilbao_10_114_11.htm,Switch-ak / sareko ekipamendua,bilbo,gestioa,Sistema Virtual,10.114.11.0/24,"Hostname; Oharrak (columna Ping del original ignorada)",42,cargado
 bilbao_10_114_12.htm,10.114.12.x,bilbo,gestioa,(independiente),10.114.12.0/24,"Hostname; Oharrak (IPs inferidas: hostname vacio, nombre en Oharrak)",43,"cargado, con pendientes (ver notas)"
+IPs_10_3_12.htm,10.3.12.x,miramon,gestioa,Miramon Gestioa,10.3.12.0/24,EQUIPO=Hostname,46,cargado
