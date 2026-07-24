@@ -28,7 +28,7 @@
     --btn-neutral:  #eceafc; --btn-neutral-hover: #ddd9f7; --btn-neutral-ink: #33314a;
 
     --row-free: #eaf7ec;
-    --row-used: #a9def8;
+    --row-used: #d3edfb;
     --search-match: #fff2a8;
   }
   @media (prefers-color-scheme: dark) {
@@ -252,8 +252,18 @@
   table.ip-table tr.ip-row-group td { text-align: center; font-style: italic; color: var(--text-secondary); }
   table.ip-table tr.ip-row-group:hover td { color: var(--text-primary); }
   table.ip-table .ping-col { width: 44px; text-align: center; white-space: nowrap; }
-  table.ip-table .resolve-col { width: 68px; text-align: center; white-space: nowrap; }
+  table.ip-table .resolve-col { width: 190px; }
+  table.ip-table th.resolve-col, table.ip-table th.ping-col { text-align: center; }
   table.ip-table th.diag-group { text-align: center; }
+  .header-action-btn { color: inherit; font-weight: 700; padding: 0; text-decoration-color: transparent; }
+  .header-action-btn:hover { text-decoration-color: currentColor; color: var(--btn-blue-ink); }
+  td.resolve-col.cell-with-btn { gap: 4px; }
+  .resolve-result { flex: 1; font-size: 0.72rem; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  button.assign-arrow-btn {
+    display: none; padding: 0 4px; background: none; color: var(--btn-blue-ink); font-weight: 700; flex: none;
+  }
+  button.assign-arrow-btn.show { display: inline-block; }
+  button.assign-arrow-btn:hover { background: var(--btn-blue); transform: none; box-shadow: none; }
   .ip-filter-row { display: flex; gap: 6px; margin-bottom: 8px; }
   .ip-filter-row button { padding: 4px 10px; font-size: 0.75rem; }
   .ip-filter-row button.active { outline: 2px solid var(--btn-blue-ink); outline-offset: -2px; }
@@ -380,6 +390,7 @@ const REDO_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 const EYE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const EYE_OFF_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0112 19c-7 0-11-7-11-7a20.3 20.3 0 015.06-5.94M9.9 4.24A10.4 10.4 0 0112 4c7 0 11 7 11 7a20.3 20.3 0 01-2.68 3.68M14.12 14.12a3 3 0 11-4.24-4.24"/><path d="M1 1l22 22"/></svg>`;
 const X_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
+const ARROW_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>`;
 const LOCK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>`;
 const UNLOCK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.5-2.5"/></svg>`;
 document.getElementById('undo-btn').innerHTML = UNDO_ICON;
@@ -1227,17 +1238,21 @@ async function runPing(btn, ip) {
   }
 }
 
-async function runResolve(btn, ip, input, onSaved) {
+async function runResolve(btn, ip, input, onSaved, resultSpan, assignBtn) {
   if (!ip) return;
   btn.classList.remove('ping-red', 'ping-green');
   btn.classList.add('pinging');
   btn.disabled = true;
+  if (resultSpan) resultSpan.textContent = '';
+  if (assignBtn) assignBtn.classList.remove('show');
   try {
     const result = await api(`/resolve/${ip}`);
     btn.classList.remove('pinging');
     if (result.found) {
       btn.classList.add('ping-green');
       btn.title = result.hostname;
+      if (resultSpan) { resultSpan.textContent = result.hostname; resultSpan.title = result.hostname; }
+      if (assignBtn) assignBtn.classList.add('show');
       if (input) {
         input.value = result.hostname;
         await onSaved(result.hostname);
@@ -1245,11 +1260,13 @@ async function runResolve(btn, ip, input, onSaved) {
     } else {
       btn.classList.add('ping-red');
       btn.title = 'Ez da ebatzi';
+      if (resultSpan) resultSpan.textContent = 'Ez da ebatzi';
     }
   } catch (err) {
     btn.classList.remove('pinging');
     btn.classList.add('ping-red');
     btn.title = err.message;
+    if (resultSpan) resultSpan.textContent = err.message;
   } finally {
     btn.disabled = false;
   }
@@ -1266,7 +1283,11 @@ function buildHostRowEl(node, cols, ip, entry) {
     ? `<td class="broom-col"><button type="button" class="broom-btn" title="Errenkada hutsik utzi (IPa askatu)">${X_ICON}</button></td>`
     : '';
   const pingCell = `<td class="ping-col"><button type="button" class="ping-btn" data-ip="${ip}" title="Ping egin"></button></td>`;
-  const resolveCell = `<td class="resolve-col"><button type="button" class="ping-btn main-resolve-btn" title="Hostname-a ebatzi"></button></td>`;
+  const resolveCell = `<td class="resolve-col cell-with-btn">`
+    + `<button type="button" class="ping-btn main-resolve-btn" title="Hostname-a ebatzi"></button>`
+    + `<span class="resolve-result"></span>`
+    + `<button type="button" class="assign-arrow-btn" title="Zutabe honen Hostname-ari esleitu">${ARROW_ICON}</button>`
+    + `</td>`;
   const cells = cols.map(c => {
     const val = entry ? (entry.values[String(c.id)] || '') : '';
     const valueHtml = isAuthenticated
@@ -1285,9 +1306,6 @@ function buildHostRowEl(node, cols, ip, entry) {
   const pingBtn = tr.querySelector('button.ping-btn[data-ip]');
   if (pingBtn) pingBtn.addEventListener('click', () => runPing(pingBtn));
 
-  const mainResolveBtn = tr.querySelector('button.main-resolve-btn');
-  if (mainResolveBtn) mainResolveBtn.addEventListener('click', () => runResolve(mainResolveBtn, ip, null, null));
-
   async function saveValue(input) {
     const columnId = Number(input.dataset.col);
     await api(`/nodes/${node.id}/ip-values`, {
@@ -1302,7 +1320,25 @@ function buildHostRowEl(node, cols, ip, entry) {
     loadAll();
   }
 
-  tr.querySelectorAll('td.cell-with-btn').forEach(td => {
+  const mainResolveBtn = tr.querySelector('button.main-resolve-btn');
+  if (mainResolveBtn) {
+    const resultSpan = tr.querySelector('td.resolve-col .resolve-result');
+    const assignBtn = tr.querySelector('td.resolve-col .assign-arrow-btn');
+    // Hostname izeneko zutabea aurkitzen bada errenkada honetan, geziak
+    // ebatzitako izena zuzenean zutabe horri esleitzen dio
+    const hostnameCol = cols.find(c => c.name.toLowerCase() === 'hostname');
+    const hostnameInput = hostnameCol ? tr.querySelector(`input[data-col="${hostnameCol.id}"]`) : null;
+    if (!hostnameInput) assignBtn.style.display = 'none';
+    mainResolveBtn.addEventListener('click', () => runResolve(mainResolveBtn, ip, null, null, resultSpan, assignBtn));
+    if (hostnameInput) {
+      assignBtn.addEventListener('click', async () => {
+        hostnameInput.value = resultSpan.textContent;
+        await saveValue(hostnameInput);
+      });
+    }
+  }
+
+  tr.querySelectorAll('td.cell-with-btn:not(.resolve-col)').forEach(td => {
     const input = td.querySelector('input');
     const span = td.querySelector('span');
     const colPingBtn = td.querySelector('.col-ping-btn');
@@ -1464,8 +1500,36 @@ function renderIpTable(node) {
   table.appendChild(groupTr);
 
   const headTr = document.createElement('tr');
-  headTr.innerHTML = `<th class="ping-col">Ping</th><th class="resolve-col">Host.Res.</th>`;
+  headTr.innerHTML = `<th class="ping-col"><button type="button" class="btn-text header-action-btn" id="ping-all-btn" title="Errenkada guztiei (libre eta erabilita) ping egin">Ping</button></th>`
+    + `<th class="resolve-col"><button type="button" class="btn-text header-action-btn" id="resolve-all-btn" title="Errenkada guztien (libre eta erabilita) Hostname-a ebatzi">Host.Res.</button></th>`;
   table.appendChild(headTr);
+
+  function expandAllFreeGroups() {
+    wrap.querySelectorAll('tr.ip-row-group').forEach(groupRow => groupRow.click());
+  }
+
+  document.getElementById('ping-all-btn').addEventListener('click', async () => {
+    expandAllFreeGroups();
+    const btns = [...wrap.querySelectorAll('button.ping-btn[data-ip]')];
+    if (!btns.length) return;
+    if (btns.length > 60 && !confirm(`${btns.length} IPri ping egingo zaie, denbora har dezake. Jarraitu?`)) return;
+    await Promise.all(btns.map(b => runPing(b)));
+  });
+
+  document.getElementById('resolve-all-btn').addEventListener('click', async () => {
+    expandAllFreeGroups();
+    const items = [...wrap.querySelectorAll('tr[data-ip]')]
+      .map(rowEl => ({
+        btn: rowEl.querySelector('button.main-resolve-btn'),
+        ip: rowEl.dataset.ip,
+        resultSpan: rowEl.querySelector('td.resolve-col .resolve-result'),
+        assignBtn: rowEl.querySelector('td.resolve-col .assign-arrow-btn'),
+      }))
+      .filter(x => x.btn);
+    if (!items.length) return;
+    if (items.length > 60 && !confirm(`${items.length} IPren Hostname-a ebatziko da, denbora har dezake. Jarraitu?`)) return;
+    await Promise.all(items.map(x => runResolve(x.btn, x.ip, null, null, x.resultSpan, x.assignBtn)));
+  });
 
   table.querySelectorAll('.col-resize-handle').forEach(handle => {
     handle.addEventListener('mousedown', (e) => {
