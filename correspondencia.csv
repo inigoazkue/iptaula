@@ -30,3 +30,7 @@ bilbao_10_114_11.htm,Switch-ak / sareko ekipamendua,bilbo,gestioa,Sistema Virtua
 bilbao_10_114_12.htm,10.114.12.x,bilbo,gestioa,(independiente),10.114.12.0/24,"Hostname; Oharrak (IPs inferidas: hostname vacio, nombre en Oharrak)",43,"cargado, con pendientes (ver notas)"
 IPs_10_3_12.htm,EQUIPOS VARIOS,miramon,gestioa,Miramon Gestioa,10.3.12.0/24,EQUIPO=Hostname,46,cargado
 IPs_10_3_158.htm,EKIPO FISIKOAK,miramon,gestioa,Miramon Gestioa,10.3.158.0/24,EQUIPO=Hostname,47,cargado
+IPs_10_3_159.htm,EKIPO BIRTUALAK,miramon,gestioa,Miramon Gestioa,10.3.159.0/24,EQUIPO=Hostname,48,cargado
+IPs_10_3_200.htm,EQUIPOS VARIOS,miramon,gestioa,Miramon Gestioa,10.3.200.0/24,EQUIPO=Hostname,49,cargado
+IPs_10_3_201.htm,EQUIPOS VARIOS,miramon,gestioa,Miramon Gestioa,10.3.201.0/24,EQUIPO=Hostname,50,cargado
+IPs_10_3_202.htm,EQUIPOS VARIOS,miramon,gestioa,Miramon Gestioa,10.3.202.0/24,EQUIPO=Hostname,51,cargado
