@@ -34,3 +34,5 @@ IPs_10_3_159.htm,EKIPO BIRTUALAK,miramon,gestioa,Miramon Gestioa,10.3.159.0/24,E
 IPs_10_3_200.htm,EQUIPOS VARIOS,miramon,gestioa,Miramon Gestioa,10.3.200.0/24,EQUIPO=Hostname,49,cargado
 IPs_10_3_201.htm,EQUIPOS VARIOS,miramon,gestioa,Miramon Gestioa,10.3.201.0/24,EQUIPO=Hostname,50,cargado
 IPs_10_3_202.htm,EQUIPOS VARIOS,miramon,gestioa,Miramon Gestioa,10.3.202.0/24,EQUIPO=Hostname,51,cargado
+IPs_10_132_2.htm,MORPHO SAREA,miramon,gestioa,(independiente),10.132.2.0/24,EQUIPO=Hostname,52,cargado
+IPs_10_114_15.htm,MIR GESTIO-SAREA,miramon,gestioa,(independiente),10.114.15.0/24,"EKIPOA=Hostname; AZALPENA=Oharrak",53,"cargado (rango vacio, sin datos en el original)"
