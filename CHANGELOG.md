@@ -2,6 +2,27 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/). Este proyecto usa versionado semántico.
 
+## [1.2.0] - 2026-07-24
+
+### Añadido
+
+- Resolución de hostname sin registro DNS: cuando falla la resolución DNS inversa, se intenta por NetBIOS (nbtscan) y, si tampoco responde, por SMB (nmap smb-os-discovery negociando una sesión real sobre el puerto 445) — cubre equipos con el servicio de nombres NetBIOS clásico desactivado o bloqueado por firewall.
+- Las cabeceras de la tabla de IPs se quedan fijas al hacer scroll hacia abajo en el modal de edición.
+- Botón para lanzar ping u resolución de hostname sobre todas las IPs del rango a la vez, junto a los títulos "Ping"/"Host.Res.".
+- Las columnas de datos de la tabla de IPs se pueden reordenar arrastrándolas (no aplica a la columna de IP ni a la de diagnóstico).
+- Las columnas de la tabla de IPs se pueden ensanchar arrastrando su borde; al hacerlo, el modal se ensancha en la misma medida (y se estrecha de vuelta sin bajar de su tamaño inicial).
+
+### Cambiado
+
+- Ping y resolución de hostname ya no requieren haber iniciado sesión.
+- Reescrita la tabla de IPs con `<colgroup>` para que el ancho de cada columna sea fiable con cabeceras agrupadas (antes "IP honen diagnostikoa" impedía calcular bien el ancho de Ping/Host.Res. por separado).
+
+### Corregido
+
+- Las celdas con botón de ping/resolución (que habían perdido el centrado vertical al forzar `display:flex` directamente en la celda) vuelven a centrarse correctamente.
+- `remove_range_column` ya no deja entradas de IP huérfanas sin ningún valor al quitar una columna de un rango.
+- Texto de ayuda para usuarios sin sesión: decía "laranja = erabilita" (naranja) cuando el color real de fila usada es azul.
+
 ## [1.1.0] - 2026-07-23
 
 ### Añadido
