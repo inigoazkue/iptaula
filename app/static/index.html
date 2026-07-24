@@ -260,7 +260,7 @@
   table.ip-table th.diag-group { text-align: center; }
   .header-action-btn { color: inherit; font-weight: 700; padding: 0; text-decoration-color: transparent; }
   .header-action-btn:hover { text-decoration-color: currentColor; color: var(--btn-blue-ink); }
-  td.resolve-col.cell-with-btn { gap: 4px; }
+  td.resolve-col .cell-flex-row { gap: 4px; }
   .resolve-result { flex: 1; font-size: 0.72rem; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   button.assign-arrow-btn {
     display: none; padding: 0 4px; background: none; color: var(--btn-blue-ink); font-weight: 700; flex: none;
@@ -281,9 +281,12 @@
   button.ping-btn.ping-blue   { background: #3d82c9; opacity: 1; }
   button.ping-btn.ping-red    { background: #d4514f; opacity: 1; }
   @keyframes ping-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
-  td.cell-with-btn { display: flex; align-items: center; gap: 6px; width: 100%; box-sizing: border-box; }
-  td.cell-with-btn input, td.cell-with-btn span { flex: 1; min-width: 0; width: 100%; overflow: hidden; text-overflow: ellipsis; }
-  td.cell-with-btn input { margin: 0; }
+  /* td.cell-with-btn ez da fisikoki flex bihurtzen: table-cell gisa geratzen
+     da (bestela vertical-align:middle-k ez luke balio, eta errenkadaren
+     altuera osoa bete beharrean bere edukira mugatzen da, kutxa txiki bat
+     bailitzan gelaxkaren barruan). Barruko div batek darama flex-a. */
+  .cell-flex-row { display: flex; align-items: center; gap: 6px; width: 100%; box-sizing: border-box; }
+  .cell-flex-row input, .cell-flex-row span { flex: 1; min-width: 0; width: 100%; overflow: hidden; text-overflow: ellipsis; margin: 0; }
 
   .ip-col-toggle-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
   .col-toggle-btn { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; font-size: 0.72rem; }
@@ -1326,21 +1329,21 @@ function buildHostRowEl(node, cols, ip, entry) {
     ? `<td class="broom-col"><button type="button" class="broom-btn" title="Errenkada hutsik utzi (IPa askatu)">${X_ICON}</button></td>`
     : '';
   const pingCell = `<td class="ping-col"><button type="button" class="ping-btn" data-ip="${ip}" title="Ping egin"></button></td>`;
-  const resolveCell = `<td class="resolve-col cell-with-btn">`
+  const resolveCell = `<td class="resolve-col cell-with-btn"><div class="cell-flex-row">`
     + `<button type="button" class="ping-btn main-resolve-btn" title="Hostname-a ebatzi"></button>`
     + `<span class="resolve-result"></span>`
     + `<button type="button" class="assign-arrow-btn" title="Zutabe honen Hostname-ari esleitu">${ARROW_ICON}</button>`
-    + `</td>`;
+    + `</div></td>`;
   const cells = cols.map(c => {
     const val = entry ? (entry.values[String(c.id)] || '') : '';
     const valueHtml = isAuthenticated
       ? `<input data-col="${c.id}" value="${escapeAttr(val)}">`
       : `<span title="${escapeAttr(val)}">${escapeHtml(val)}</span>`;
     if (c.is_ip) {
-      return `<td class="cell-with-btn">${valueHtml}<button type="button" class="ping-btn col-ping-btn" title="Ping egin balio honi"></button></td>`;
+      return `<td class="cell-with-btn"><div class="cell-flex-row">${valueHtml}<button type="button" class="ping-btn col-ping-btn" title="Ping egin balio honi"></button></div></td>`;
     }
     if (c.is_hostname) {
-      return `<td class="cell-with-btn">${valueHtml}<button type="button" class="ping-btn col-resolve-btn" title="Hostname-a ebatzi"></button></td>`;
+      return `<td class="cell-with-btn"><div class="cell-flex-row">${valueHtml}<button type="button" class="ping-btn col-resolve-btn" title="Hostname-a ebatzi"></button></div></td>`;
     }
     return `<td>${valueHtml}</td>`;
   }).join('');
