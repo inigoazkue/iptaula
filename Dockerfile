@@ -20,7 +20,10 @@ ENV PIP_CERT=/etc/ssl/certs/ca-certificates.crt \
     SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
 # iputils-ping: IP-tauletako ping botoiak `ping` bitarra behar du kontenitzailean.
-RUN apt-get update && apt-get install -y --no-install-recommends iputils-ping \
+# nbtscan: DNS bidez ebazten ez diren Windows ekipoen NetBIOS izena lortzeko
+# (askok ez daukate DNS alderantzizko erregistrorik, baina NetBIOS bidez bai
+# ematen dute izena).
+RUN apt-get update && apt-get install -y --no-install-recommends iputils-ping nbtscan \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

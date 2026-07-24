@@ -499,6 +499,24 @@ def ping_ip(ip: str):
     return {"ok_count": ok_count, "rejected": rejected, "detail": output[-1000:]}
 
 
+def resolve_via_nbtscan(ip):
+    """Alokerako izen bat aurkitzeko bide osagarria: sare barruko Windows
+    ekipo askok ez daukate DNS alderantzizko erregistrorik konfiguratuta,
+    baina NetBIOS bidez (UDP 137) beren izena ematen dute zuzenean."""
+    try:
+        result = subprocess.run(
+            ["nbtscan", "-q", "-t", "300", ip],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return None
+    line = result.stdout.strip()
+    if not line:
+        return None
+    parts = line.split()
+    return parts[1] if len(parts) > 1 else None
+
+
 @app.get("/api/resolve/{ip}")
 def resolve_ip(ip: str):
     try:
@@ -509,11 +527,16 @@ def resolve_ip(ip: str):
     socket.setdefaulttimeout(5)
     try:
         hostname, _, _ = socket.gethostbyaddr(ip)
-        return {"found": True, "hostname": hostname}
+        return {"found": True, "hostname": hostname, "source": "dns"}
     except (socket.herror, socket.gaierror, socket.timeout, OSError):
-        return {"found": False, "hostname": None}
+        pass
     finally:
         socket.setdefaulttimeout(old_timeout)
+
+    netbios_name = resolve_via_nbtscan(ip)
+    if netbios_name:
+        return {"found": True, "hostname": netbios_name, "source": "netbios"}
+    return {"found": False, "hostname": None}
 
 
 # --- árbol completo (sedes, roles y nodos con sus IPs/columnas) ---

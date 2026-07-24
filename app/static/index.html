@@ -251,7 +251,7 @@
   table.ip-table tr.ip-row-group { cursor: pointer; }
   table.ip-table tr.ip-row-group td { text-align: center; font-style: italic; color: var(--text-secondary); }
   table.ip-table tr.ip-row-group:hover td { color: var(--text-primary); }
-  table.ip-table .ping-col { width: 44px; text-align: center; white-space: nowrap; }
+  table.ip-table .ping-col { width: 26px; text-align: center; white-space: nowrap; }
   table.ip-table .resolve-col { width: 190px; }
   table.ip-table th.resolve-col, table.ip-table th.ping-col { text-align: center; }
   table.ip-table th.diag-group { text-align: center; }
@@ -279,7 +279,7 @@
   button.ping-btn.ping-red    { background: #d4514f; opacity: 1; }
   @keyframes ping-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
   td.cell-with-btn { display: flex; align-items: center; gap: 6px; }
-  td.cell-with-btn input, td.cell-with-btn span { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  td.cell-with-btn input, td.cell-with-btn span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
   .ip-col-toggle-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
   .col-toggle-btn { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; font-size: 0.72rem; }
@@ -1251,8 +1251,9 @@ async function runResolve(btn, ip, input, onSaved, resultSpan, assignBtn) {
     btn.classList.remove('pinging');
     if (result.found) {
       btn.classList.add('ping-green');
-      btn.title = result.hostname;
-      if (resultSpan) { resultSpan.textContent = result.hostname; resultSpan.title = result.hostname; }
+      const sourceNote = result.source === 'netbios' ? ' (NetBIOS bidez)' : '';
+      btn.title = result.hostname + sourceNote;
+      if (resultSpan) { resultSpan.textContent = result.hostname; resultSpan.title = result.hostname + sourceNote; }
       if (assignBtn) assignBtn.classList.add('show');
       if (input) {
         input.value = result.hostname;
