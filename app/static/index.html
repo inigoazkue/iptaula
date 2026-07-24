@@ -1508,7 +1508,7 @@ function renderIpTable(node) {
     wrap.querySelectorAll('tr.ip-row-group').forEach(groupRow => groupRow.click());
   }
 
-  document.getElementById('ping-all-btn').addEventListener('click', async () => {
+  headTr.querySelector('#ping-all-btn').addEventListener('click', async () => {
     expandAllFreeGroups();
     const btns = [...wrap.querySelectorAll('button.ping-btn[data-ip]')];
     if (!btns.length) return;
@@ -1516,7 +1516,7 @@ function renderIpTable(node) {
     await Promise.all(btns.map(b => runPing(b)));
   });
 
-  document.getElementById('resolve-all-btn').addEventListener('click', async () => {
+  headTr.querySelector('#resolve-all-btn').addEventListener('click', async () => {
     expandAllFreeGroups();
     const items = [...wrap.querySelectorAll('tr[data-ip]')]
       .map(rowEl => ({
