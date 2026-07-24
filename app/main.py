@@ -826,6 +826,13 @@ def remove_range_column(node_id: int, column_id: int, _auth=Depends(require_admi
             "(SELECT id FROM ip_entries WHERE node_id=?)",
             (column_id, node_id),
         )
+        # una entrada sin ningun valor no distinto de una IP libre: si al quitar
+        # la columna se queda sin nada, se borra, igual que hace set_ip_value.
+        conn.execute(
+            "DELETE FROM ip_entries WHERE node_id=? AND id NOT IN "
+            "(SELECT ip_entry_id FROM ip_values WHERE value IS NOT NULL AND value != '')",
+            (node_id,),
+        )
     return {"ok": True}
 
 
