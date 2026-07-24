@@ -255,11 +255,30 @@
   table.ip-table th.resolve-col, table.ip-table th.ping-col { text-align: center; }
   col.col-broom { width: 26px; }
   col.col-ip { width: 115px; }
-  col.col-ping { width: 26px; }
+  col.col-ping { width: 55px; }
   col.col-resolve { width: 190px; }
   table.ip-table th.diag-group { text-align: center; }
-  .header-action-btn { color: inherit; font-weight: 700; padding: 0; text-decoration-color: transparent; }
-  .header-action-btn:hover { text-decoration-color: currentColor; color: var(--btn-blue-ink); }
+  .col-header-flex { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+  .col-label-text { white-space: nowrap; }
+  button.run-all-btn {
+    width: 16px; height: 16px; padding: 0; border-radius: 50%; flex: none;
+    border: 1px solid var(--border); background: var(--btn-neutral); color: var(--btn-neutral-ink);
+    font-size: 0.6rem; line-height: 1; display: inline-flex; align-items: center; justify-content: center;
+  }
+  button.run-all-btn:hover { background: var(--btn-blue); color: var(--btn-blue-ink); transform: none; box-shadow: none; }
+
+  /* IP taularen goiburuak itsatsita mantendu beherantz scroll egitean:
+     .ip-table-scroll bera da benetan korritzen den kutxa (ez modal-inner
+     osoa), horrela goiburuen top offset-a kutxa horrekiko kalkula daiteke. */
+  .ip-table-scroll { max-height: 55vh; overflow-y: auto; }
+  table.ip-table th { position: sticky; z-index: 2; }
+  table.ip-table tr.ip-thead-row1 th { top: 0; }
+  table.ip-table tr.ip-thead-row2 th { top: var(--ip-thead-row1-h, 0px); }
+
+  th.col-draggable { cursor: grab; }
+  th.col-dragging { opacity: 0.35; }
+  th.col-drop-before { box-shadow: inset 3px 0 0 0 var(--btn-blue-ink); }
+  th.col-drop-after  { box-shadow: inset -3px 0 0 0 var(--btn-blue-ink); }
   td.resolve-col .cell-flex-row { gap: 4px; }
   .resolve-result { flex: 1; font-size: 0.72rem; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   button.assign-arrow-btn {
@@ -807,6 +826,7 @@ function collectDescendantIds(node) {
 // estado global mínimo del arrastre en curso (más simple y fiable entre
 // navegadores que depender de dataTransfer.getData durante el dragover)
 let draggingNode = null;
+let draggingColumnId = null;
 
 async function performMove(payload, onError) {
   try {
@@ -1555,6 +1575,7 @@ function renderIpTable(node) {
   table.appendChild(colgroup);
 
   const groupTr = document.createElement('tr');
+  groupTr.className = 'ip-thead-row1';
   groupTr.innerHTML = `${isAuthenticated ? '<th rowspan="2"></th>' : ''}<th rowspan="2">IP</th><th class="diag-group" colspan="2">IP honen diagnostikoa</th>`;
   // las columnas de datos ocupan las dos filas de cabecera (rowspan) para no partir su titulo
   cols.forEach((c, idx) => {
@@ -1562,19 +1583,79 @@ function renderIpTable(node) {
     th.rowSpan = 2;
     th.className = 'resizable-col';
     th.textContent = c.name;
+    if (isAdmin() && cols.length > 1) {
+      th.classList.add('col-draggable');
+      th.draggable = true;
+      th.addEventListener('dragstart', (e) => {
+        e.stopPropagation();
+        draggingColumnId = c.id;
+        th.classList.add('col-dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(c.id));
+      });
+      th.addEventListener('dragend', (e) => {
+        e.stopPropagation();
+        th.classList.remove('col-dragging');
+        draggingColumnId = null;
+      });
+      th.addEventListener('dragover', (e) => {
+        if (draggingColumnId === null || draggingColumnId === c.id) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = th.getBoundingClientRect();
+        const before = (e.clientX - rect.left) < rect.width / 2;
+        th.classList.toggle('col-drop-before', before);
+        th.classList.toggle('col-drop-after', !before);
+      });
+      th.addEventListener('dragleave', (e) => {
+        e.stopPropagation();
+        th.classList.remove('col-drop-before', 'col-drop-after');
+      });
+      th.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const before = th.classList.contains('col-drop-before');
+        th.classList.remove('col-drop-before', 'col-drop-after');
+        const draggedId = draggingColumnId;
+        draggingColumnId = null;
+        if (draggedId === null || draggedId === c.id) return;
+        await persistColumnReorder(draggedId, c.id, before);
+      });
+    }
     th.appendChild(makeResizeHandle(colsData[idx]));
     groupTr.appendChild(th);
   });
   table.appendChild(groupTr);
 
+  // zutabe ikusgaiak arrastatuta berrantolatzean, ezkutuek beren jatorrizko
+  // posizio erlatiboa mantentzen dute (fronte-aldeko ezkutatzea ez baita
+  // backend-erako existitzen; hark zutabe aktibo GUZTIEN ordena behar du).
+  async function persistColumnReorder(draggedId, targetId, before) {
+    const visibleIds = cols.map(c => c.id);
+    const fromIdx = visibleIds.indexOf(draggedId);
+    if (fromIdx === -1) return;
+    visibleIds.splice(fromIdx, 1);
+    const toIdx = visibleIds.indexOf(targetId);
+    if (toIdx === -1) return;
+    visibleIds.splice(before ? toIdx : toIdx + 1, 0, draggedId);
+    let vi = 0;
+    const fullOrder = allCols.map(c => hiddenColumns.has(c.id) ? c.id : visibleIds[vi++]);
+    try {
+      await api(`/nodes/${node.id}/columns/reorder`, {method: 'POST', body: JSON.stringify({column_ids: fullOrder})});
+      await refresh();
+      await renderRangeModal(node.id);
+    } catch (err) { alert(err.message); }
+  }
+
   const headTr = document.createElement('tr');
+  headTr.className = 'ip-thead-row2';
   const pingTh = document.createElement('th');
   pingTh.className = 'ping-col';
-  pingTh.innerHTML = `<button type="button" class="btn-text header-action-btn" id="ping-all-btn" title="Errenkada guztiei (libre eta erabilita) ping egin">Ping</button>`;
+  pingTh.innerHTML = `<span class="col-header-flex"><span class="col-label-text">Ping</span><button type="button" class="run-all-btn" id="ping-all-btn" title="Errenkada guztiei (libre eta erabilita) ping egin">▶</button></span>`;
   pingTh.appendChild(makeResizeHandle(colPing));
   const resolveTh = document.createElement('th');
   resolveTh.className = 'resolve-col';
-  resolveTh.innerHTML = `<button type="button" class="btn-text header-action-btn" id="resolve-all-btn" title="Errenkada guztien (libre eta erabilita) Hostname-a ebatzi">Host.Res.</button>`;
+  resolveTh.innerHTML = `<span class="col-header-flex"><span class="col-label-text">Host.Res.</span><button type="button" class="run-all-btn" id="resolve-all-btn" title="Errenkada guztien (libre eta erabilita) Hostname-a ebatzi">▶</button></span>`;
   resolveTh.appendChild(makeResizeHandle(colResolve));
   headTr.appendChild(pingTh);
   headTr.appendChild(resolveTh);
@@ -1632,6 +1713,9 @@ function renderIpTable(node) {
   }
   scrollWrap.appendChild(table);
   wrap.appendChild(scrollWrap);
+  // bigarren goiburu-lerroa lehenengoaren azpian itsatsita mantentzeko
+  // (position:sticky), lehenengoaren benetako altuera neurtu behar da JSetik.
+  table.style.setProperty('--ip-thead-row1-h', groupTr.getBoundingClientRect().height + 'px');
 }
 
 /* ---------- zutabeen katalogoaren modala ---------- */

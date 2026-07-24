@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS columns_catalog (
 CREATE TABLE IF NOT EXISTS range_columns (
     node_id INTEGER NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
     column_id INTEGER NOT NULL REFERENCES columns_catalog(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (node_id, column_id)
 );
 
@@ -228,6 +229,12 @@ def migrate_schema(conn):
     if col_cols and "is_hostname" not in col_cols:
         conn.execute("ALTER TABLE columns_catalog ADD COLUMN is_hostname INTEGER NOT NULL DEFAULT 0")
 
+    # `position` berria da range_columns-en: tarte bakoitzean zutabeak
+    # eskuz ordenatu ahal izateko (arrastatuta).
+    rc_cols = [r["name"] for r in conn.execute("PRAGMA table_info(range_columns)")]
+    if rc_cols and "position" not in rc_cols:
+        conn.execute("ALTER TABLE range_columns ADD COLUMN position INTEGER NOT NULL DEFAULT 0")
+
 
 def init_db():
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
@@ -308,6 +315,10 @@ class ColumnIn(BaseModel):
 
 class RangeColumnIn(BaseModel):
     column_id: int
+
+
+class ColumnReorderIn(BaseModel):
+    column_ids: list[int]
 
 
 class IpValueSet(BaseModel):
@@ -422,7 +433,10 @@ def restore_snapshot(conn, snapshot_json):
             row,
         )
     for row in data["range_columns"]:
-        conn.execute("INSERT INTO range_columns (node_id, column_id) VALUES (:node_id, :column_id)", row)
+        conn.execute(
+            "INSERT INTO range_columns (node_id, column_id, position) VALUES (:node_id, :column_id, :position)",
+            row,
+        )
     for row in data["ip_entries"]:
         conn.execute(
             "INSERT INTO ip_entries (id, node_id, ip, created_at) VALUES (:id, :node_id, :ip, :created_at)", row
@@ -553,7 +567,7 @@ def get_tree():
             "SELECT rc.node_id AS node_id, c.id AS column_id, c.name AS name, "
             "c.is_ip AS is_ip, c.is_hostname AS is_hostname "
             "FROM range_columns rc JOIN columns_catalog c ON c.id = rc.column_id "
-            "ORDER BY c.name"
+            "ORDER BY rc.position, c.name"
         ):
             columns_by_node.setdefault(rc["node_id"], []).append(
                 {"id": rc["column_id"], "name": rc["name"],
@@ -829,10 +843,31 @@ def add_range_column(node_id: int, body: RangeColumnIn, _auth=Depends(require_ad
         if not conn.execute("SELECT id FROM columns_catalog WHERE id=?", (body.column_id,)).fetchone():
             raise HTTPException(404, "Zutabea ez da aurkitu")
         push_undo(conn)
+        next_pos = conn.execute(
+            "SELECT COALESCE(MAX(position), -1) + 1 AS next FROM range_columns WHERE node_id=?", (node_id,)
+        ).fetchone()["next"]
         conn.execute(
-            "INSERT OR IGNORE INTO range_columns (node_id, column_id) VALUES (?, ?)",
-            (node_id, body.column_id),
+            "INSERT OR IGNORE INTO range_columns (node_id, column_id, position) VALUES (?, ?, ?)",
+            (node_id, body.column_id, next_pos),
         )
+    return {"ok": True}
+
+
+@app.post("/api/nodes/{node_id}/columns/reorder")
+def reorder_range_columns(node_id: int, body: ColumnReorderIn, _auth=Depends(require_admin)):
+    with get_db() as conn:
+        get_range_node(conn, node_id)
+        active_ids = {
+            r["column_id"] for r in conn.execute("SELECT column_id FROM range_columns WHERE node_id=?", (node_id,))
+        }
+        if set(body.column_ids) != active_ids:
+            raise HTTPException(400, "Zerrendak tarte honetako zutabe aktibo guztiak eduki behar ditu, behin bakoitza")
+        push_undo(conn)
+        for pos, column_id in enumerate(body.column_ids):
+            conn.execute(
+                "UPDATE range_columns SET position=? WHERE node_id=? AND column_id=?",
+                (pos, node_id, column_id),
+            )
     return {"ok": True}
 
 
