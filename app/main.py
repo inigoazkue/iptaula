@@ -480,7 +480,7 @@ PING_RECEIVED_RE = re.compile(r"(\d+)\s+received", re.I)
 
 
 @app.get("/api/ping/{ip}")
-def ping_ip(ip: str, _auth=Depends(require_auth)):
+def ping_ip(ip: str):
     try:
         ip_address(ip)
     except ValueError:
@@ -500,7 +500,7 @@ def ping_ip(ip: str, _auth=Depends(require_auth)):
 
 
 @app.get("/api/resolve/{ip}")
-def resolve_ip(ip: str, _auth=Depends(require_auth)):
+def resolve_ip(ip: str):
     try:
         ip_address(ip)
     except ValueError:

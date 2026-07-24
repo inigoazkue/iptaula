@@ -252,6 +252,8 @@
   table.ip-table tr.ip-row-group td { text-align: center; font-style: italic; color: var(--text-secondary); }
   table.ip-table tr.ip-row-group:hover td { color: var(--text-primary); }
   table.ip-table .ping-col { width: 44px; text-align: center; white-space: nowrap; }
+  table.ip-table .resolve-col { width: 68px; text-align: center; white-space: nowrap; }
+  table.ip-table th.diag-group { text-align: center; }
   .ip-filter-row { display: flex; gap: 6px; margin-bottom: 8px; }
   .ip-filter-row button { padding: 4px 10px; font-size: 0.75rem; }
   .ip-filter-row button.active { outline: 2px solid var(--btn-blue-ink); outline-offset: -2px; }
@@ -267,7 +269,7 @@
   button.ping-btn.ping-red    { background: #d4514f; opacity: 1; }
   @keyframes ping-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
   td.cell-with-btn { display: flex; align-items: center; gap: 6px; }
-  td.cell-with-btn input { flex: 1; }
+  td.cell-with-btn input, td.cell-with-btn span { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 
   .ip-col-toggle-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
   .col-toggle-btn { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; font-size: 0.72rem; }
@@ -276,11 +278,20 @@
 
   button.broom-btn {
     width: 20px; height: 20px; padding: 2px; display: flex; align-items: center; justify-content: center;
-    border-radius: 6px; background: none; color: var(--text-muted); flex: none;
+    border-radius: 6px; background: none; color: var(--text-muted);
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   }
   button.broom-btn svg { width: 14px; height: 14px; }
-  button.broom-btn:hover { color: var(--btn-pink-ink); background: var(--btn-pink); transform: none; box-shadow: none; }
-  table.ip-table .broom-col { width: 26px; text-align: center; }
+  button.broom-btn:hover { color: var(--btn-pink-ink); background: var(--btn-pink); transform: translate(-50%, -50%); box-shadow: none; }
+  table.ip-table .broom-col { width: 26px; text-align: center; position: relative; }
+
+  th.resizable-col { position: relative; }
+  .col-resize-handle {
+    position: absolute; top: 0; right: 0; bottom: 0; width: 7px; cursor: col-resize;
+    touch-action: none;
+  }
+  .col-resize-handle:hover, .col-resize-handle.resizing { background: var(--btn-blue); }
+  .ip-table-scroll { overflow-x: auto; }
 
   .catalog-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--gridline); font-size: 0.85rem; }
   .catalog-row:last-child { border-bottom: none; }
@@ -1254,34 +1265,57 @@ function buildHostRowEl(node, cols, ip, entry) {
   const broomCell = isAuthenticated
     ? `<td class="broom-col"><button type="button" class="broom-btn" title="Errenkada hutsik utzi (IPa askatu)">${X_ICON}</button></td>`
     : '';
-  const pingCell = isAuthenticated
-    ? `<td class="ping-col"><button type="button" class="ping-btn" data-ip="${ip}" title="Ping egin"></button></td>`
-    : '';
-  const resolveCell = isAuthenticated
-    ? `<td class="ping-col"><button type="button" class="ping-btn main-resolve-btn" title="Hostname-a ebatzi"></button></td>`
-    : '';
+  const pingCell = `<td class="ping-col"><button type="button" class="ping-btn" data-ip="${ip}" title="Ping egin"></button></td>`;
+  const resolveCell = `<td class="resolve-col"><button type="button" class="ping-btn main-resolve-btn" title="Hostname-a ebatzi"></button></td>`;
   const cells = cols.map(c => {
     const val = entry ? (entry.values[String(c.id)] || '') : '';
-    if (!isAuthenticated) return `<td>${escapeHtml(val)}</td>`;
+    const valueHtml = isAuthenticated
+      ? `<input data-col="${c.id}" value="${escapeAttr(val)}">`
+      : `<span title="${escapeAttr(val)}">${escapeHtml(val)}</span>`;
     if (c.is_ip) {
-      return `<td class="cell-with-btn"><input data-col="${c.id}" value="${escapeAttr(val)}">`
-        + `<button type="button" class="ping-btn col-ping-btn" title="Ping egin balio honi"></button></td>`;
+      return `<td class="cell-with-btn">${valueHtml}<button type="button" class="ping-btn col-ping-btn" title="Ping egin balio honi"></button></td>`;
     }
     if (c.is_hostname) {
-      return `<td class="cell-with-btn"><input data-col="${c.id}" value="${escapeAttr(val)}">`
-        + `<button type="button" class="ping-btn col-resolve-btn" title="Hostname-a ebatzi"></button></td>`;
+      return `<td class="cell-with-btn">${valueHtml}<button type="button" class="ping-btn col-resolve-btn" title="Hostname-a ebatzi"></button></td>`;
     }
-    return `<td><input data-col="${c.id}" value="${escapeAttr(val)}"></td>`;
+    return `<td>${valueHtml}</td>`;
   }).join('');
   tr.innerHTML = `${broomCell}<td>${ip}</td>${pingCell}${resolveCell}${cells}`;
-
-  if (!isAuthenticated) return tr;
 
   const pingBtn = tr.querySelector('button.ping-btn[data-ip]');
   if (pingBtn) pingBtn.addEventListener('click', () => runPing(pingBtn));
 
   const mainResolveBtn = tr.querySelector('button.main-resolve-btn');
   if (mainResolveBtn) mainResolveBtn.addEventListener('click', () => runResolve(mainResolveBtn, ip, null, null));
+
+  async function saveValue(input) {
+    const columnId = Number(input.dataset.col);
+    await api(`/nodes/${node.id}/ip-values`, {
+      method: 'PUT',
+      body: JSON.stringify({ip, column_id: columnId, value: input.value || null}),
+    });
+    const stillHasData = [...tr.querySelectorAll('input[data-col]')].some(i => i.value.trim() !== '');
+    tr.classList.toggle('ip-row-used', stillHasData);
+    tr.classList.toggle('ip-row-free', !stillHasData);
+    // memorian eguneratzen da modaletik kanpoko txartelaren ikuspegi
+    // azkarra egunean egoteko, modala itxi edo birkargatu gabe
+    loadAll();
+  }
+
+  tr.querySelectorAll('td.cell-with-btn').forEach(td => {
+    const input = td.querySelector('input');
+    const span = td.querySelector('span');
+    const colPingBtn = td.querySelector('.col-ping-btn');
+    if (colPingBtn) {
+      colPingBtn.addEventListener('click', () => runPing(colPingBtn, (input ? input.value : span.textContent).trim()));
+    }
+    const colResolveBtn = td.querySelector('.col-resolve-btn');
+    if (colResolveBtn) {
+      colResolveBtn.addEventListener('click', () => runResolve(colResolveBtn, ip, input, input ? () => saveValue(input) : null));
+    }
+  });
+
+  if (!isAuthenticated) return tr;
 
   const broomBtn = tr.querySelector('button.broom-btn');
   if (broomBtn) {
@@ -1308,28 +1342,6 @@ function buildHostRowEl(node, cols, ip, entry) {
       }
     });
   }
-
-  async function saveValue(input) {
-    const columnId = Number(input.dataset.col);
-    await api(`/nodes/${node.id}/ip-values`, {
-      method: 'PUT',
-      body: JSON.stringify({ip, column_id: columnId, value: input.value || null}),
-    });
-    const stillHasData = [...tr.querySelectorAll('input[data-col]')].some(i => i.value.trim() !== '');
-    tr.classList.toggle('ip-row-used', stillHasData);
-    tr.classList.toggle('ip-row-free', !stillHasData);
-    // memorian eguneratzen da modaletik kanpoko txartelaren ikuspegi
-    // azkarra egunean egoteko, modala itxi edo birkargatu gabe
-    loadAll();
-  }
-
-  tr.querySelectorAll('td.cell-with-btn').forEach(td => {
-    const input = td.querySelector('input');
-    const colPingBtn = td.querySelector('.col-ping-btn');
-    if (colPingBtn) colPingBtn.addEventListener('click', () => runPing(colPingBtn, input.value.trim()));
-    const colResolveBtn = td.querySelector('.col-resolve-btn');
-    if (colResolveBtn) colResolveBtn.addEventListener('click', () => runResolve(colResolveBtn, ip, input, () => saveValue(input)));
-  });
 
   tr.querySelectorAll('input[data-col]').forEach(input => {
     input.addEventListener('blur', async () => {
@@ -1432,12 +1444,48 @@ function renderIpTable(node) {
     return;
   }
 
+  const scrollWrap = document.createElement('div');
+  scrollWrap.className = 'ip-table-scroll';
   const table = document.createElement('table');
   table.className = 'ip-table';
-  const totalCols = 1 + (isAuthenticated ? 3 : 0) + cols.length;
+  const totalCols = 2 + (isAuthenticated ? 1 : 0) + cols.length;
+
+  const groupTr = document.createElement('tr');
+  groupTr.innerHTML = `${isAuthenticated ? '<th class="broom-col" rowspan="2"></th>' : ''}<th rowspan="2">IP</th><th class="diag-group" colspan="2">IP honen diagnostikoa</th>`;
+  // las columnas de datos ocupan las dos filas de cabecera (rowspan) para no partir su titulo
+  cols.forEach((c) => {
+    const th = document.createElement('th');
+    th.rowSpan = 2;
+    th.className = 'resizable-col';
+    th.textContent = c.name;
+    th.appendChild(Object.assign(document.createElement('div'), {className: 'col-resize-handle'}));
+    groupTr.appendChild(th);
+  });
+  table.appendChild(groupTr);
+
   const headTr = document.createElement('tr');
-  headTr.innerHTML = `${isAuthenticated ? '<th class="broom-col"></th>' : ''}<th>IP</th>${isAuthenticated ? '<th class="ping-col">Ping</th><th class="ping-col">Hostname</th>' : ''}${cols.map(c => `<th>${escapeHtml(c.name)}</th>`).join('')}`;
+  headTr.innerHTML = `<th class="ping-col">Ping</th><th class="resolve-col">Host.Res.</th>`;
   table.appendChild(headTr);
+
+  table.querySelectorAll('.col-resize-handle').forEach(handle => {
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const th = handle.parentElement;
+      handle.classList.add('resizing');
+      const startX = e.clientX;
+      const startWidth = th.offsetWidth;
+      function onMove(ev) {
+        th.style.width = Math.max(50, startWidth + (ev.clientX - startX)) + 'px';
+      }
+      function onUp() {
+        handle.classList.remove('resizing');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
 
   let i = 0;
   while (i < hosts.length) {
@@ -1462,7 +1510,8 @@ function renderIpTable(node) {
     }
     i = j;
   }
-  wrap.appendChild(table);
+  scrollWrap.appendChild(table);
+  wrap.appendChild(scrollWrap);
 }
 
 /* ---------- zutabeen katalogoaren modala ---------- */
