@@ -531,6 +531,26 @@ def resolve_via_nbtscan(ip):
     return parts[1] if len(parts) > 1 else None
 
 
+SMB_COMPUTER_NAME_RE = re.compile(r"Computer name:\s*(\S+)")
+
+
+def resolve_via_smb(ip):
+    """Hirugarren bide bat: ekipo askotan NetBIOS Name Service (UDP 137)
+    desgaituta edo firewall-ak blokeatuta dago, baina fitxategi-partekatzea
+    (SMB, TCP 445) irekita jarraitzen du. nmap-en smb-os-discovery script-ak
+    SMB saio bat negoziatuta lortzen du ostalariaren izena, 137 erantzuten
+    ez badu ere."""
+    try:
+        result = subprocess.run(
+            ["nmap", "-Pn", "-n", "-p445", "--script", "smb-os-discovery", "--host-timeout", "4s", ip],
+            capture_output=True, text=True, timeout=8,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return None
+    match = SMB_COMPUTER_NAME_RE.search(result.stdout)
+    return match.group(1) if match else None
+
+
 @app.get("/api/resolve/{ip}")
 def resolve_ip(ip: str):
     try:
@@ -550,6 +570,11 @@ def resolve_ip(ip: str):
     netbios_name = resolve_via_nbtscan(ip)
     if netbios_name:
         return {"found": True, "hostname": netbios_name, "source": "netbios"}
+
+    smb_name = resolve_via_smb(ip)
+    if smb_name:
+        return {"found": True, "hostname": smb_name, "source": "smb"}
+
     return {"found": False, "hostname": None}
 
 

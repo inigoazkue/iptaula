@@ -1176,7 +1176,7 @@ async function renderRangeModal(nodeId) {
       <h3>IP helbideak</h3>
       ${isAuthenticated
         ? '<p class="node-desc" style="margin-bottom:8px;">Tartearen IP guztiak zerrendatzen dira. Idatzi zuzenean gelaxka batean gordetzeko (eremutik irtetean bakarrik gordetzen da); daturik gabeko errenkada librea dela ulertzen da.</p>'
-        : '<p class="node-desc" style="margin-bottom:8px;">Hasi saioa editatzeko. Berdea = librea, laranja = erabilita.</p>'}
+        : '<p class="node-desc" style="margin-bottom:8px;">Hasi saioa editatzeko. Berdea = libre, urdina = erabilita.</p>'}
       <div id="ip-table-wrap"></div>
     </div>
   `;
@@ -1288,7 +1288,7 @@ async function runResolve(btn, ip, input, onSaved, resultSpan, assignBtn) {
     btn.classList.remove('pinging');
     if (result.found) {
       btn.classList.add('ping-green');
-      const sourceNote = result.source === 'netbios' ? ' (NetBIOS bidez)' : '';
+      const sourceNote = result.source === 'netbios' ? ' (NetBIOS bidez)' : result.source === 'smb' ? ' (SMB bidez)' : '';
       btn.title = result.hostname + sourceNote;
       if (resultSpan) { resultSpan.textContent = result.hostname; resultSpan.title = result.hostname + sourceNote; }
       if (assignBtn) assignBtn.classList.add('show');

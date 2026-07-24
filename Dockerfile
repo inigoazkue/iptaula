@@ -23,7 +23,9 @@ ENV PIP_CERT=/etc/ssl/certs/ca-certificates.crt \
 # nbtscan: DNS bidez ebazten ez diren Windows ekipoen NetBIOS izena lortzeko
 # (askok ez daukate DNS alderantzizko erregistrorik, baina NetBIOS bidez bai
 # ematen dute izena).
-RUN apt-get update && apt-get install -y --no-install-recommends iputils-ping nbtscan \
+# nmap: NetBIOS Name Service-a (UDP 137) desgaituta duten ekipoentzako azken
+# saiakera, SMB saio bat negoziatuta (TCP 445, smb-os-discovery script-a).
+RUN apt-get update && apt-get install -y --no-install-recommends iputils-ping nbtscan nmap \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
