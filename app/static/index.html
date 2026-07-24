@@ -219,7 +219,7 @@
     background: var(--surface-1); color: var(--text-primary); box-shadow: 0 12px 40px rgba(0,0,0,0.25);
   }
   dialog::backdrop { background: rgba(20,18,30,0.45); }
-  .modal-inner { padding: 20px 22px; max-height: 85vh; overflow-y: auto; }
+  .modal-inner { padding: 20px 22px; max-height: 85vh; overflow-y: auto; overflow-x: auto; }
   .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
   .modal-header h2 { font-size: 1.15rem; margin: 0; }
   .modal-section { margin-bottom: 18px; }
@@ -255,7 +255,7 @@
   table.ip-table th.resolve-col, table.ip-table th.ping-col { text-align: center; }
   col.col-broom { width: 26px; }
   col.col-ip { width: 115px; }
-  col.col-ping { width: 55px; }
+  col.col-ping { width: 74px; }
   col.col-resolve { width: 190px; }
   table.ip-table th.diag-group { text-align: center; }
   .col-header-flex { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
@@ -267,10 +267,12 @@
   }
   button.run-all-btn:hover { background: var(--btn-blue); color: var(--btn-blue-ink); transform: none; box-shadow: none; }
 
-  /* IP taularen goiburuak itsatsita mantendu beherantz scroll egitean:
-     .ip-table-scroll bera da benetan korritzen den kutxa (ez modal-inner
-     osoa), horrela goiburuen top offset-a kutxa horrekiko kalkula daiteke. */
-  .ip-table-scroll { max-height: 55vh; overflow-y: auto; }
+  /* IP taularen goiburuak itsatsita mantendu beherantz scroll egitean.
+     Scroll-a modal-inner osoak berak egiten du (ikus .modal-inner
+     overflow-x/-y); .ip-table-scroll ez da bera korritzen den kutxa --
+     tarteko elementu batek overflow ez-visible bat balu, sticky-a harekiko
+     itsatsiko litzateke modal-inner osoarekiko ordez, eta ez luke ezer
+     itsatsiko benetan (kutxa horrek berak ez baitu inoiz korritzen). */
   table.ip-table th { position: sticky; z-index: 2; }
   table.ip-table tr.ip-thead-row1 th { top: 0; }
   table.ip-table tr.ip-thead-row2 th { top: var(--ip-thead-row1-h, 0px); }
@@ -327,7 +329,9 @@
     touch-action: none;
   }
   .col-resize-handle:hover, .col-resize-handle.resizing { background: var(--btn-blue); }
-  .ip-table-scroll { overflow-x: auto; }
+  /* overflow propiorik gabe: horrela ez da sticky-aren erreferentzia
+     bihurtzen, eta korritzea (bertikala zein horizontala) modal-inner
+     osoak berak kudeatzen du. */
 
   .catalog-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--gridline); font-size: 0.85rem; }
   .catalog-row:last-child { border-bottom: none; }
@@ -1106,6 +1110,10 @@ async function openRangeModal(nodeId) {
   modalBaseWidth = null;
   await renderRangeModal(nodeId);
   modal.showModal();
+  // renderRangeModal-ek modala oraindik itxita zegoela neurtu du goiburuaren
+  // altuera (dialog itxiak display:none dauka, eta neurketa 0 ematen du);
+  // orain, ikusgai dagoenean, birkalkulatu.
+  syncIpTheadOffset();
 }
 
 document.getElementById('range-modal').addEventListener('close', () => {
@@ -1713,9 +1721,17 @@ function renderIpTable(node) {
   }
   scrollWrap.appendChild(table);
   wrap.appendChild(scrollWrap);
-  // bigarren goiburu-lerroa lehenengoaren azpian itsatsita mantentzeko
-  // (position:sticky), lehenengoaren benetako altuera neurtu behar da JSetik.
-  table.style.setProperty('--ip-thead-row1-h', groupTr.getBoundingClientRect().height + 'px');
+  syncIpTheadOffset();
+}
+
+// Bigarren goiburu-lerroa (Ping/Host.Res.) lehenengoaren azpian itsatsita
+// mantentzeko (position:sticky), lehenengoaren benetako altuera neurtu behar
+// da JSetik. dialog oraindik itxita badago (display:none), neurketak 0
+// ematen du -- horregatik berriz deitzen zaio honi modala erakutsi ondoren.
+function syncIpTheadOffset() {
+  const table = document.querySelector('#ip-table-wrap table.ip-table');
+  const groupTr = table && table.querySelector('tr.ip-thead-row1');
+  if (groupTr) table.style.setProperty('--ip-thead-row1-h', groupTr.getBoundingClientRect().height + 'px');
 }
 
 /* ---------- zutabeen katalogoaren modala ---------- */
