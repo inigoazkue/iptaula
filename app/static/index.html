@@ -502,6 +502,7 @@ initTheme();
 
 document.querySelectorAll('dialog').forEach(dialog => {
   dialog.addEventListener('click', (e) => {
+    if (resizingColumn) return; // zutabe bat ensanchatzen ari zela solte du sagua, ez itxi
     if (e.target !== dialog) return; // barruko edukian klik, ez atzealdean
     const rect = dialog.getBoundingClientRect();
     const inside = e.clientY >= rect.top && e.clientY <= rect.bottom && e.clientX >= rect.left && e.clientX <= rect.right;
@@ -1274,6 +1275,7 @@ async function runResolve(btn, ip, input, onSaved, resultSpan, assignBtn) {
 
 const MIN_FREE_RUN = 3; // gutxienez zenbat IP libre segidan behar diren taldean bildu eta tolesteko
 let ipTableFilter = 'all'; // 'all' | 'used' | 'free'
+let resizingColumn = false; // zutabe bat ensanchatzen ari denean, modala ez itxi kanpoan klik eginda
 
 function buildHostRowEl(node, cols, ip, entry) {
   const tr = document.createElement('tr');
@@ -1535,16 +1537,25 @@ function renderIpTable(node) {
     handle.addEventListener('mousedown', (e) => {
       e.preventDefault();
       const th = handle.parentElement;
+      const dialog = document.getElementById('range-modal');
       handle.classList.add('resizing');
+      resizingColumn = true;
       const startX = e.clientX;
       const startWidth = th.offsetWidth;
+      const startDialogWidth = dialog.offsetWidth;
       function onMove(ev) {
-        th.style.width = Math.max(50, startWidth + (ev.clientX - startX)) + 'px';
+        const delta = ev.clientX - startX;
+        th.style.width = Math.max(50, startWidth + delta) + 'px';
+        // modala bera ere zabaldu, bestela zutabe bat zabaltzeak besteak estutzen ditu
+        if (delta > 0) {
+          dialog.style.width = Math.min(window.innerWidth * 0.95, startDialogWidth + delta) + 'px';
+        }
       }
       function onUp() {
         handle.classList.remove('resizing');
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
+        setTimeout(() => { resizingColumn = false; }, 0);
       }
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
